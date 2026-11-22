@@ -1105,6 +1105,8 @@ holds, `[. 7F]` or `<30 40>`, and a **rest** is `.`, with `~` read as one too, a
 | `r` | Replaces the token: `r`, then the new one, and back on it |
 | `s` | Types over the token |
 | `i` `a` | Types before or after the token, or on a fixed length over it |
+| `D` | Takes away from the token to the end of its group, or of the line |
+| `C` | The same, typing in its place |
 | `p` | Pastes after the token, or on a fixed length over it |
 | `Esc` | Stops typing, or closes it, the last text that read put back |
 | `Enter` | Closes it, where the text reads, typing or not |
@@ -1122,6 +1124,16 @@ and `y` take a text object, and `p` pastes what they took:
 | `da<` `ca<` `ya<` | The `< >` group |
 | `di(` `ci(` `yi(` | A Euclid's numbers |
 | `da(` `ca(` `ya(` | A Euclid, with its brackets |
+
+`D` and `C` stop at the bracket closing the group the cursor is in, so on the `.` of
+`[x . x] x` they leave `[x] x`, and the brackets never come apart. What they take, `p` pastes.
+
+While typing, an opening bracket brings its partner, as an editor's auto-pairs do: `[` gives
+`[]` with the cursor between them, and `<` and a Euclid's `(` the same. Typing the closing one
+steps over it, and `Backspace` on an opening one with nothing in it takes both, so a group is
+never left open. Inside a Euclid's `( )`, what `i` and `a` type goes beside the number after a
+comma, so `a` on the 8 of `x(3,8)` and `2` gives `x(3,8,2)`. A mark typed first after `a`
+joins the token rather than standing apart, so `a` on an `x` and `?30` gives `x?30`.
 
 The buffer is a dialog: a key it doesn't have does nothing, `j` and `k` too, until `Esc` or
 `Enter` closes it; `Tab` still plays, and on the shape panel `Space d` says what the token under

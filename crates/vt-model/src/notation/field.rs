@@ -40,6 +40,9 @@ pub enum Object {
     Inside(Bracket),
     /// `a[` `a<` `a(`: the same group with its brackets.
     Around(Bracket),
+    /// `D` `C`: from the token to the end of the group it's in, or of the line at the top, so the
+    /// brackets round it stay.
+    ToEnd,
 }
 
 /// Where what's typed goes, against the token under the cursor.
@@ -64,6 +67,8 @@ pub struct Insert {
     pub from: usize,
     pub to: usize,
     gap: Gap,
+    /// How long the separator put in is: the grammar's, or a Euclid's comma inside its `( )`.
+    sep: usize,
     /// Back to the tokens once one is typed, as `r` is.
     one: bool,
 }
@@ -343,6 +348,27 @@ impl Field {
         }
     }
 
+    /// What goes between a token and one typed beside it: a comma among a Euclid's numbers, in its
+    /// `( )`, and the grammar's separator anywhere else.
+    fn between_at(&self, at: usize) -> &'static str {
+        let inside = self
+            .tokens
+            .get(at)
+            .filter(|token| token.kind.bracket().is_none());
+        match inside.and_then(|_| self.enclosing(at)) {
+            Some(open) if self.tokens[open].kind == Kind::Open(Bracket::Round) => ",",
+            _ => self.grammar.between,
+        }
+    }
+
+    /// Whether a text has a mark changing the token before it, or a Euclid's `(`, at a byte.
+    fn opens_or_modifies(&self, text: &str, at: usize) -> bool {
+        split(self.grammar, text).iter().any(|token| {
+            token.at.start == at
+                && matches!(token.kind, Kind::Modifier | Kind::Open(Bracket::Round))
+        })
+    }
+
     /// A token, or the whole group where it's a bracket.
     fn whole(&self, at: usize) -> Range<usize> {
         match self.tokens[at].kind {
@@ -367,6 +393,14 @@ impl Field {
                     .take_while(|token| token.kind == Kind::Modifier && token.depth == depth)
                     .count();
                 Some(whole.start..whole.end + modifiers)
+            }
+            Object::ToEnd => {
+                let start = self.whole(at).start;
+                let end = self
+                    .enclosing(start)
+                    .and_then(|open| self.partner(open))
+                    .unwrap_or(self.tokens.len());
+                Some(start..end)
             }
             Object::Inside(bracket) | Object::Around(bracket) => {
                 let mut open = self.group(at)?;
@@ -470,9 +504,11 @@ impl Field {
         }
         let mut bytes = self.bytes(&tokens);
         // A space either side goes with it, after it where there's one.
+        // A Euclid's comma goes as a space does.
+        let apart = |c: &char| c.is_whitespace() || *c == ',';
         let after = self.text[bytes.end..]
             .chars()
-            .take_while(|c| c.is_whitespace())
+            .take_while(apart)
             .map(char::len_utf8)
             .sum::<usize>();
         if after > 0 {
@@ -481,7 +517,7 @@ impl Field {
             let before = self.text[..bytes.start]
                 .chars()
                 .rev()
-                .take_while(|c| c.is_whitespace())
+                .take_while(apart)
                 .map(char::len_utf8)
                 .sum::<usize>();
             bytes.start -= before;
@@ -509,6 +545,7 @@ impl Field {
             from: bytes.start,
             to: bytes.start,
             gap: Gap::None,
+            sep: 0,
             one: false,
         });
         Ok(())
@@ -586,11 +623,12 @@ impl Field {
             self.room(1)?;
         }
         let one = one || (fixed && self.grammar.width.is_some());
-        let between = self.grammar.between;
+        let between = self.between_at(at);
         let insert = |from, gap| Insert {
             from,
             to: from,
             gap,
+            sep: between.len(),
             one,
         };
         if self.tokens.is_empty() {
@@ -644,6 +682,7 @@ impl Field {
             from,
             to: from,
             gap,
+            sep: self.grammar.between.len(),
             one: false,
         });
         Ok(())
@@ -665,6 +704,7 @@ impl Field {
             from: 0,
             to: 0,
             gap: Gap::None,
+            sep: 0,
             one: false,
         });
     }
@@ -676,8 +716,43 @@ impl Field {
         let Some(mut insert) = self.insert else {
             return false;
         };
+        // A mark typed first after a token, `?`, `*2` or a Euclid's `(`, joins the token rather
+        // than standing apart from it.
+        if insert.from == insert.to && insert.gap == Gap::Before && insert.sep > 0 {
+            let start = insert.from - insert.sep;
+            let mut joined = self.text.clone();
+            joined.replace_range(start..insert.from, "");
+            joined.insert(start, c);
+            if self.opens_or_modifies(&joined, start) {
+                self.text.replace_range(start..insert.from, "");
+                insert = Insert {
+                    from: start,
+                    to: start,
+                    gap: Gap::None,
+                    ..insert
+                };
+            }
+        }
+        // A closing bracket typed where its partner was put in steps over it.
+        if Bracket::of(c).is_some_and(|(_, opens)| !opens) && self.text[insert.to..].starts_with(c)
+        {
+            insert.to += c.len_utf8();
+            self.insert = Some(insert);
+            self.settle();
+            return true;
+        }
         self.text.insert(insert.to, c);
+        let at = insert.to;
         insert.to += c.len_utf8();
+        // An opening bracket the grammar reads as one gets its partner after the cursor, as an
+        // editor's auto-pairs do, so a group is never left open.
+        if let Some((bracket, true)) = Bracket::of(c)
+            && split(self.grammar, &self.text)
+                .iter()
+                .any(|token| token.at.start == at && token.kind == Kind::Open(bracket))
+        {
+            self.text.insert(insert.to, bracket.close());
+        }
         self.insert = Some(insert);
         self.settle();
         let typed = self.text[insert.from..insert.to].chars().count();
@@ -694,24 +769,34 @@ impl Field {
         };
         insert.to -= c.len_utf8();
         self.insert = Some(insert);
-        self.replace(insert.to..insert.to + c.len_utf8(), "");
+        // An opening bracket taken back takes its partner put in after it, the pair being empty.
+        let mut end = insert.to + c.len_utf8();
+        if let Some((bracket, true)) = Bracket::of(c)
+            && self.text[end..].starts_with(bracket.close())
+        {
+            end += bracket.close().len_utf8();
+        }
+        self.replace(insert.to..end, "");
     }
 
-    /// Back to the tokens, and where the cursor goes: on what was typed.
+    /// Back to the tokens, and where the cursor goes: on the last token typed.
     pub fn end_insert(&mut self) -> usize {
         let Some(insert) = self.insert.take() else {
             return 0;
         };
         if insert.from == insert.to {
-            let gap = self.grammar.between.len();
+            let gap = insert.sep;
             match insert.gap {
                 Gap::None => {}
                 Gap::Before => self.replace(insert.from - gap..insert.from, ""),
                 Gap::After => self.replace(insert.to..insert.to + gap, ""),
             }
         }
+        // On the last token typed, as Vim's `Esc` leaves the cursor on the last character, so `D`
+        // and `x` go from there; with nothing typed, where it was.
         let from = match insert.gap {
-            Gap::Before if insert.from == insert.to => insert.from - self.grammar.between.len(),
+            _ if insert.from < insert.to => insert.to - 1,
+            Gap::Before => insert.from - insert.sep,
             _ => insert.from,
         };
         self.place_from(from)
@@ -932,7 +1017,7 @@ mod tests {
         for c in ". 50".chars() {
             field.typed(c);
         }
-        assert_eq!(field.end_insert(), 2);
+        assert_eq!(field.end_insert(), 3, "on the 50, the last typed");
         assert_eq!(field.text(), "10 [. 50] 40");
         field.change(2, Object::Inside(Bracket::Square)).unwrap();
         assert_eq!(field.end_insert(), 2);
@@ -969,19 +1054,22 @@ mod tests {
         let mut field = words("10 30");
         field.insert(0, Place::After, false).unwrap();
         assert_eq!(field.text(), "10  30");
+        // The `[` closes itself as it's typed, so the text reads all along.
         for c in "[2".chars() {
             assert!(field.typed(c));
         }
-        assert_eq!(field.text(), "10 [2 30");
-        assert_eq!(field.bad_token(), Some(1));
-        assert_eq!(field.bad().unwrap().why, "an open with no close");
-        assert_eq!(field.good(), "10  30");
-        field.typed(']');
+        assert_eq!(field.text(), "10 [2] 30");
         assert!(field.bad().is_none());
+        // Typing its `]` steps over the one put in, and taking that back leaves the group open.
+        field.typed(']');
+        assert_eq!(field.text(), "10 [2] 30");
         assert_eq!(field.good(), "10 [2] 30");
         field.backspace();
         assert_eq!(field.text(), "10 [2 30");
-        assert_eq!(field.end_insert(), 1);
+        assert_eq!(field.bad_token(), Some(1));
+        assert_eq!(field.bad().unwrap().why, "an open with no close");
+        assert_eq!(field.good(), "10 [2] 30");
+        assert_eq!(field.end_insert(), 2, "on the 2, the last typed");
         field.put_back();
         assert_eq!(field.text(), "10 [2] 30");
         // Nothing typed takes back the space put in for it.
@@ -1148,5 +1236,103 @@ mod tests {
         weights.replace_all();
         assert_eq!(weights.text(), "FFFFF");
         assert!(weights.inserting().is_none());
+    }
+
+    /// A rhythm field, typing `typed` from `place` on the token at `at`, then back to the tokens.
+    fn typed_at(text: &str, at: usize, place: Place, typed: &str) -> Field {
+        let mut field = Field::new(GrammarId::Rhythm.grammar(), text, note());
+        field.insert(at, place, false).unwrap();
+        for c in typed.chars() {
+            field.typed(c);
+        }
+        field.end_insert();
+        field
+    }
+
+    /// Inside a Euclid's `( )`, what's typed beside a number goes after a comma, so `a` on the 8
+    /// gives it a rotation and `i` on the 3 a number before it, and the line still reads.
+    #[test]
+    fn typing_beside_a_euclids_number_goes_after_a_comma() {
+        let after = typed_at("x(3,8) .", 3, Place::After, "2");
+        assert_eq!(after.text(), "x(3,8,2) .");
+        assert!(after.bad().is_none());
+        assert_eq!(
+            typed_at("x(3,8) .", 2, Place::Before, "2").text(),
+            "x(2,3,8) ."
+        );
+        assert_eq!(
+            typed_at("x(3,8) .", 3, Place::Over, "16").text(),
+            "x(3,16) ."
+        );
+        // Nothing typed takes the comma back out.
+        assert_eq!(typed_at("x(3,8) .", 3, Place::After, "").text(), "x(3,8) .");
+        // Outside it, a space as ever.
+        assert_eq!(
+            typed_at("x(3,8) .", 5, Place::After, "x").text(),
+            "x(3,8) . x"
+        );
+    }
+
+    /// A mark typed first after `a` joins the token, and anything else stands apart.
+    #[test]
+    fn a_mark_typed_after_a_token_joins_it() {
+        assert_eq!(typed_at("x . x", 0, Place::After, "?30").text(), "x?30 . x");
+        assert_eq!(typed_at("x . x", 2, Place::After, "*2").text(), "x . x*2");
+        assert_eq!(
+            typed_at("x . x", 0, Place::After, "(3,8").text(),
+            "x(3,8) . x"
+        );
+        assert_eq!(typed_at("x . x", 0, Place::After, "x").text(), "x x . x");
+        // After a group's bracket, a Euclid joins the group.
+        assert_eq!(typed_at("x [x x]", 4, Place::After, "(3,8").text(), "x [x x](3,8)");
+    }
+
+    /// An opening bracket gets its partner after the cursor; typing the partner steps over it,
+    /// and taking the opening one back with nothing in it takes both.
+    #[test]
+    fn brackets_close_themselves_as_they_open() {
+        let mut field = Field::new(GrammarId::Rhythm.grammar(), "", note());
+        field.append().unwrap();
+        for c in "x [x x".chars() {
+            field.typed(c);
+        }
+        assert_eq!(field.text(), "x [x x]");
+        assert!(field.bad().is_none(), "never open while typing");
+        field.typed(']');
+        field.typed(' ');
+        field.typed('<');
+        assert_eq!(field.text(), "x [x x] <>");
+        field.backspace();
+        assert_eq!(field.text(), "x [x x] ");
+        for c in "<x .> x(3,8)".chars() {
+            field.typed(c);
+        }
+        field.end_insert();
+        assert_eq!(field.text(), "x [x x] <x .> x(3,8)");
+        assert!(field.bad().is_none());
+    }
+
+    /// `D` takes away from the token to the end of the line, or of the group it's in, its brackets
+    /// kept, and keeps it for `p`; `C` types in its place.
+    #[test]
+    fn d_takes_away_to_the_end_of_the_line_or_its_group() {
+        let mut line = Field::new(GrammarId::Rhythm.grammar(), "x . [x x] x", note());
+        assert_eq!(line.delete(1, Object::ToEnd), Ok(0));
+        assert_eq!(line.text(), "x");
+        assert_eq!(line.paste(0), Ok(1));
+        assert_eq!(line.text(), "x . [x x] x");
+        let mut group = Field::new(GrammarId::Rhythm.grammar(), "x [x . x] x", note());
+        group.delete(3, Object::ToEnd).unwrap();
+        assert_eq!(group.text(), "x [x] x");
+        let mut euclid = Field::new(GrammarId::Rhythm.grammar(), "x(3,8,2)", note());
+        euclid.delete(3, Object::ToEnd).unwrap();
+        assert_eq!(euclid.text(), "x(3)");
+        let mut changed = Field::new(GrammarId::Rhythm.grammar(), "x . x x", note());
+        changed.change(2, Object::ToEnd).unwrap();
+        for c in "[x x]".chars() {
+            changed.typed(c);
+        }
+        changed.end_insert();
+        assert_eq!(changed.text(), "x . [x x]");
     }
 }
