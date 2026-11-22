@@ -50,6 +50,10 @@ pub enum TokenKey {
     Paste,
     /// `K`: what can go in the token's place, listed with what each means.
     Offer,
+    /// `u` and `C-r`: the last change taken back, or put back again, as in Vim, a stretch of
+    /// typing being one change.
+    Undo,
+    Redo,
 }
 
 /// The token editor's rows of the binding table, but its text objects.
@@ -180,6 +184,12 @@ pub const KEYS: &[(&str, Cmd, &str)] = &[
         Cmd::InTokens(TokenKey::Offer),
         "List what can go in the token's place, each with what it means",
     ),
+    ("u", Cmd::InTokens(TokenKey::Undo), "Undo the last change"),
+    (
+        "C-r",
+        Cmd::InTokens(TokenKey::Redo),
+        "Redo what u took back",
+    ),
 ];
 
 /// The rows of an operator's text objects: `it` `at`, `i[` `a[`, `i<` `a<`, `i(` `a(`.
@@ -259,6 +269,10 @@ pub struct Tokens {
     pub field: Field,
     count: Option<usize>,
     pub menu: Option<CommandMenu>,
+    /// The text and the cursor's token before each change, for `u`, and what `u` took back, for
+    /// `C-r`. A stretch of typing is one change, kept from before it started.
+    undone: Vec<(String, usize)>,
+    redone: Vec<(String, usize)>,
 }
 
 /// The title of the list `K` opens on a token, and of the one it and `C-n` open while typing.
@@ -294,7 +308,47 @@ impl Tokens {
             field,
             count: None,
             menu: None,
+            undone: Vec::new(),
+            redone: Vec::new(),
         }
+    }
+
+    /// Keep what the text was before a change, where a key changed it or started typing, as one
+    /// step for `u`, and forget what `u` had taken back.
+    fn remember(&mut self, before: (String, usize), was_typing: bool) {
+        if was_typing {
+            return;
+        }
+        let changed = self.field.text() != before.0 || self.field.inserting().is_some();
+        if changed && self.undone.last().map(|(text, _)| text) != Some(&before.0) {
+            self.undone.push(before);
+            self.redone.clear();
+        }
+    }
+
+    /// `u` or `C-r`: back to the text before the last change, or on to the one `u` left, with the
+    /// cursor where it was; a typing that changed nothing is passed over.
+    fn step_history(&mut self, back: bool, at: &mut usize) -> Did {
+        let (from, to) = match back {
+            true => (&mut self.undone, &mut self.redone),
+            false => (&mut self.redone, &mut self.undone),
+        };
+        while let Some((text, place)) = from.pop() {
+            if text == self.field.text() {
+                continue;
+            }
+            to.push((self.field.text().to_owned(), *at));
+            self.field.set(&text);
+            *at = place.min(self.field.tokens().len().saturating_sub(1));
+            return Did::Changed;
+        }
+        Did::Refused(
+            match back {
+                true => "Nothing to undo in the line",
+                false => "Nothing to redo in the line",
+            }
+            .to_owned(),
+        )
     }
 
     /// The buffer opened on a field, and the token the cursor starts on, or why it's opened on
@@ -303,6 +357,7 @@ impl Tokens {
     /// `S` put each back to what it starts as first; and a field with all the tokens it takes
     /// has no room for another.
     pub fn open(mut field: Field, how: Opening) -> (Self, usize, Option<String>) {
+        let opened_on = field.text().to_owned();
         let fixed = field.fixed().is_some();
         let last = field.tokens().len().saturating_sub(1);
         let (at, why) = match how {
@@ -317,7 +372,12 @@ impl Tokens {
                 (0, fixed.then(|| FIXED.to_owned()))
             }
         };
-        (Self::new(field), at, why)
+        let mut tokens = Self::new(field);
+        // Typing from the start is undone back to the text it opened on.
+        if tokens.field.inserting().is_some() || tokens.field.text() != opened_on {
+            tokens.undone.push((opened_on, at));
+        }
+        (tokens, at, why)
     }
 
     /// Whether every key goes to the text or the list: while typing, or with a list open.
@@ -479,6 +539,19 @@ impl Tokens {
 
     /// A key of the table, from the token at `at`, which it moves.
     pub fn key(&mut self, key: TokenKey, at: &mut usize) -> Did {
+        match key {
+            TokenKey::Undo => return self.step_history(true, at),
+            TokenKey::Redo => return self.step_history(false, at),
+            _ => {}
+        }
+        let before = (self.field.text().to_owned(), *at);
+        let was_typing = self.field.inserting().is_some();
+        let did = self.table_key(key, at);
+        self.remember(before, was_typing);
+        did
+    }
+
+    fn table_key(&mut self, key: TokenKey, at: &mut usize) -> Did {
         if let (TokenKey::Zero, Some(count)) = (key, self.count) {
             self.count = Some((count * 10).min(MOST));
             return Did::Moved;
@@ -519,9 +592,12 @@ impl Tokens {
                 }
                 return Did::Moved;
             }
-            // `0` is the first token by now; and what's offered depends on what's around the
-            // field, which [`Tokens::offer`] is given by whoever shows it.
-            TokenKey::Zero | TokenKey::Offer => return Did::Moved,
+            // `0` is the first token by now; what's offered depends on what's around the field,
+            // which [`Tokens::offer`] is given by whoever shows it; and `u` and `C-r` are taken
+            // before the table's keys, in [`Tokens::key`].
+            TokenKey::Zero | TokenKey::Offer | TokenKey::Undo | TokenKey::Redo => {
+                return Did::Moved;
+            }
             // A field of fixed length has no room between its tokens, so it's typed over.
             TokenKey::Type(_) if field.fixed().is_some() => {
                 field.insert(*at, Place::Over, false).map(|()| None)
@@ -559,6 +635,14 @@ impl Tokens {
     /// them, a token the grammar types in place, which moves on to the next, or a count's digit.
     /// Any other key held with `Ctrl` does nothing.
     pub fn text(&mut self, key: Key, at: &mut usize, around: &Around) -> Did {
+        let before = (self.field.text().to_owned(), *at);
+        let was_typing = self.field.inserting().is_some();
+        let did = self.text_key(key, at, around);
+        self.remember(before, was_typing);
+        did
+    }
+
+    fn text_key(&mut self, key: Key, at: &mut usize, around: &Around) -> Did {
         if let Some(did) = self.menu_key(key, at) {
             return did;
         }

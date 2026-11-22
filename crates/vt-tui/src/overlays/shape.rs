@@ -1529,10 +1529,15 @@ impl Overlay for ShapePanel {
     /// `Tab` and `Shift-Tab` play whatever's held with them. Cmd with `=`'s and its neighbours'
     /// Cmd keys is that key, but types nothing; Cmd with any other key does nothing; `Ctrl` is
     /// read on a letter while a field of tokens is typed or its list is open, for `C-n` `C-p`
-    /// `C-y` and `C-e`; and nothing else held is read.
+    /// `C-y` and `C-e`, and on `r` whenever one's open, for `C-r`'s redo; and nothing else held
+    /// is read.
     fn reads(&self, key: Key) -> Key {
         match key.code {
             KeyCode::Tab | KeyCode::BackTab => Key::new(key.code),
+            KeyCode::Char('r') if key.ctrl && !key.command && self.tokens.is_some() => Key {
+                ctrl: true,
+                ..Key::new(key.code)
+            },
             _ if key.command && self.typing.is_none() => adjusting_key(key).unwrap_or(key),
             _ if key.command => key,
             KeyCode::Char(_) if key.ctrl && self.tokens.as_ref().is_some_and(Tokens::completes) => {

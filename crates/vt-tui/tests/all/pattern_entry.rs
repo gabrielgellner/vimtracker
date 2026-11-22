@@ -400,3 +400,39 @@ fn enter_after_esc_writes_the_pattern_too() {
     keys(&mut app, "!C-3 D-3<Esc>[s<Enter>");
     assert_eq!(notes(&app, 0)[2], "D-3", "at the Step it was set to");
 }
+
+/// `u` in the pattern's buffer takes back its last change, a stretch of typing as one, back to
+/// the empty line it opened on, and `C-r` puts it back, the rows following the line each time.
+#[test]
+fn u_and_ctrl_r_undo_and_redo_in_the_line() {
+    let (mut app, _rt) = app_of(1, 16);
+    keys(&mut app, "!C-3 D-3<Esc>");
+    assert_eq!(line_text(&app), "C-3 D-3");
+    keys(&mut app, "x");
+    assert_eq!(line_text(&app), "C-3");
+    keys(&mut app, "u");
+    assert_eq!(line_text(&app), "C-3 D-3", "the x taken back");
+    assert_eq!(notes(&app, 0)[4], "D-3", "and heard");
+    keys(&mut app, "u");
+    assert_eq!(line_text(&app), "", "the typing taken back, whole");
+    keys(&mut app, "u");
+    assert!(
+        app.services.status.contains("Nothing to undo"),
+        "{}",
+        app.services.status
+    );
+    keys(&mut app, "^r^r");
+    assert_eq!(line_text(&app), "C-3");
+    assert!(app.overlays.shape.is_some(), "still open");
+    keys(&mut app, "<Enter>");
+    assert_eq!(notes(&app, 0)[0], "C-3");
+}
+
+/// The pattern's line as its buffer holds it.
+fn line_text(app: &App) -> String {
+    panel(app)
+        .tokens
+        .as_ref()
+        .map(|tokens| tokens.field.text().to_owned())
+        .unwrap_or_default()
+}

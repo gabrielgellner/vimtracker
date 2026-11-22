@@ -1225,6 +1225,8 @@ Tokens	a	InTokens(Type(After))	Type after the token, or on a field of fixed leng
 Tokens	s	InTokens(Type(Over))	Type over the token
 Tokens	p	InTokens(Paste)	Paste after the token, or over it on a field of fixed length
 Tokens	K	InTokens(Offer)	List what can go in the token's place, each with what it means
+Tokens	u	InTokens(Undo)	Undo the last change
+Tokens	C-r	InTokens(Redo)	Redo what u took back
 Tokens	d i t	InTokens(Delete(Token))	Take away the token
 Tokens	d a t	InTokens(Delete(TokenAround))	Take away the token and its modifiers
 Tokens	d i [	InTokens(Delete(Inside(Square)))	Take away what the [ ] group holds
