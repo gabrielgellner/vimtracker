@@ -645,14 +645,9 @@ impl Track {
     pub fn coarse(&self, id: SettingId) -> Option<u8> {
         match id.owner().0 {
             Owner::Voice(_) | Owner::Sampler => Some(self.setting(id)),
-            Owner::Track => match id {
-                SettingId::CUT => Some(self.cutoff),
-                SettingId::RES => Some(self.resonance),
-                SettingId::PAN => Some(self.pan),
-                SettingId::SEND_A => Some(self.send_a),
-                SettingId::SEND_B => Some(self.send_b),
-                _ => None,
-            },
+            // Every one of the track's own, from the field it's kept in, so the settings added
+            // after the first five, the filter's `Drive` and `Punch` among them, have fine parts too.
+            Owner::Track => Some(self.own_value(id)),
             Owner::Slot { .. }
             | Owner::Mod(_)
             | Owner::Bypass(_)
@@ -2217,6 +2212,26 @@ mod tests {
         assert_eq!(track, Track::default());
         assert_eq!((track.cutoff, track.resonance, track.pan), (0xFF, 0, 0x80));
         assert_eq!(track.mods, default_mods());
+    }
+
+    /// Every one of the track's own settings that has a fine part has a coarse byte to go with
+    /// it, so the Sound page's fine digits move it: the filter's `Drive`, `Punch` and cuts, added
+    /// after the first five, had none, and `=` on their fine digits did nothing.
+    #[test]
+    fn every_track_setting_with_a_fine_part_has_its_coarse_byte() {
+        let track = Track::default();
+        for id in SettingId::all().filter(|id| id.owner().0 == Owner::Track) {
+            if id.entry().kind.has_fine() {
+                assert!(track.coarse(id).is_some(), "{}", id.entry().key);
+            }
+        }
+        let mut punchy = Track {
+            punch: 0x40,
+            ..Track::default()
+        };
+        assert_eq!(punchy.coarse(SettingId::PUNCH), Some(0x40));
+        punchy.set_fine(SettingId::PUNCH, 0x80);
+        assert_eq!(punchy.fine(SettingId::PUNCH), 0x80);
     }
 
     #[test]
