@@ -131,6 +131,9 @@ on the offbeats on the second.
 
 Across two or more tracks of one group, on their Note columns, the hits are the
 tracks' names, matched without case: `bd . [. bd] . sn . bd ., hh*2 [. hh]`.
+Select the drums first, side by side: on the first one's Note column, `v`, `G`
+for every row, then `W` for each drum after it, and `!`. The buffer's title says
+`Note kit line`; on one drum alone it's a pattern of that drum's notes.
 Each track holds the whole line and plays where its own name is, at its own note
 and the velocity notes are typed with, and rests everywhere else. A stack is
 natural here, as each layer is other tracks'. A name in two layers is refused,
