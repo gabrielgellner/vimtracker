@@ -112,6 +112,9 @@ const MINI_GRAMMAR: Grammar = Grammar {
              places, @n makes it n places long, ? plays it half the time and ?30 30% of it"
         }
         Kind::Value => "one of a Euclid's numbers: its hits, its parts, then how many parts later",
+        Kind::Pick => {
+            "between the choices of a [ ]: one of them is picked at random each time round"
+        }
         Kind::Open(Bracket::Square) | Kind::Close(Bracket::Square) => {
             "a group: its tokens share its place"
         }
@@ -182,6 +185,10 @@ pub(super) fn split(text: &str) -> Vec<Token> {
     let mut chars = text.char_indices().peekable();
     while let Some((at, c)) = chars.next() {
         if c.is_whitespace() || c == ',' {
+            continue;
+        }
+        if c == '|' {
+            tokens.push(Token::new(Kind::Pick, at..at + 1));
             continue;
         }
         if let Some((bracket, opens)) = Bracket::of(c) {

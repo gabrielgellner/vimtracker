@@ -44,6 +44,9 @@ pub(super) static KIT: Grammar = Grammar {
              places, @n makes it n places long, ? plays it half the time and ?30 30% of it"
         }
         Kind::Value => "one of a Euclid's numbers: its hits, its parts, then how many parts later",
+        Kind::Pick => {
+            "between the choices of a [ ]: one of them is picked at random each time round"
+        }
         Kind::Open(Bracket::Square) | Kind::Close(Bracket::Square) => {
             "a group: its tokens share its place"
         }

@@ -44,7 +44,7 @@ pub(crate) fn kind_style(kind: Kind, text: &str) -> Style {
         Kind::Bit if !matches!(text, "x" | "X" | "1") => theme::faint(),
         Kind::Weight if text == "0" => theme::faint(),
         Kind::Modifier => change(),
-        Kind::Open(_) | Kind::Close(_) => theme::dim(),
+        Kind::Open(_) | Kind::Close(_) | Kind::Pick => theme::dim(),
         Kind::Unread => theme::warning(),
         Kind::Hit | Kind::Value | Kind::Weight | Kind::Move | Kind::Bit => Style::new(),
     }
