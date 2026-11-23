@@ -132,13 +132,30 @@ a token: `:name` them. An edit to the line on any of its tracks is made on all o
 them as one change, so a `?` falls the same on every track. How tracks join and
 leave a kit line is under **A kit line** in the editing guide.
 
-## Chance over passes
+## Chance
 
-`?` draws from the fill's seed, the hit and its row, so the same hits play each
-pass until it draws again: with `Vary` at `Once` the line keeps its draw, and at
-`Each pass` it draws anew every time round. A line written with `Enter` from
-`!` freezes `< >` and `?` as their first pass; kept live with `L`, they go on
-pass to pass.
+**On the Note column, a chance is the row's own.** `C-3?30` writes the note with
+`CHA 4D` on its row, in the row's first free FX slot, rather than deciding there
+and then, so the engine rolls it as the row plays, as any `CHA` is. That puts it
+in reach of the track's `Chance`, `CDLT`, and its `Thin`: at `Thin Random` the
+note plays about 3 times in 10, a new roll each pass, or held by the dice loop;
+at `Thin Chance` the row's chance is a threshold, and `CDLT` decides whether it's
+in. So `C-3 C-3?30 C-3?70 C-3` at `Step 4 rows` writes four notes, the second at
+`CHA 4D` and the third at `CHA B3`, and under `Thin Chance` it's a mask: the 70%
+note plays at `80`, the 30% one comes in as `CDLT` rises past `A4`, and the 70%
+one goes below `5C` (**Moving every chance** in the FX guide).
+
+A hit nudged off its row, a triplet's, and a row with every FX slot taken can't
+hold a `CHA` as well, so their `?` draws here instead, as below. So does a kit
+line's, whose `?` falls the same way on every track the line spans.
+
+**Everywhere else, it's drawn in the pattern,** from the fill's seed, the hit and
+its row: on
+Velocity, Length, Nudge and FX columns there's no note to give a chance to, so
+the hit is written or not. The same hits play each pass until it draws again:
+with `Vary` at `Once` the line keeps its draw, and at `Each pass` it draws anew
+every time round. A line written with `Enter` from `!` freezes `< >` and these
+draws as their first pass; kept live with `L`, they go on pass to pass.
 
 ## Differences from TidalCycles
 

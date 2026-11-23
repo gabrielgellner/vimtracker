@@ -453,7 +453,9 @@ where that draw comes from.
 a row plays if its chance is past half and doesn't if it's below, every pass the
 same, and `CDLT` moves where that falls. Give the ghost notes `CHA 4D`, 30%, and
 the eighths `CHA B3`, 70%: at `80` the eighths play and the ghosts don't, below
-`5C` the eighths go too, and up at `C0` the ghosts come in. Rows with no `CHA` are all at 100%,
+`5C` the eighths go too, and up at `C0` the ghosts come in. A pattern's `?` on the
+Note column writes the row's `CHA`, so `!` and `C-3 C-3?30 C-3?70 C-3` write a mask
+in one line. Rows with no `CHA` are all at 100%,
 so they all go together, at `40`. `Beats` goes by where the row falls in the bar,
 `Spread` by the row's place among the phrase's notes, the van der Corput order, so
 at half every other note plays and at a quarter every fourth. Above `80` the same

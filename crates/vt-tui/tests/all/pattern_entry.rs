@@ -436,3 +436,39 @@ fn line_text(app: &App) -> String {
         .map(|tokens| tokens.field.text().to_owned())
         .unwrap_or_default()
 }
+
+/// The `CHA` a row of a track's phrase holds, if it has one.
+fn chance_on(app: &App, row: usize) -> Option<u8> {
+    app.song().tracks[0].phrases[&0].steps()[row]
+        .fx
+        .iter()
+        .find(|slot| slot.command == Some(FxCommand::Cha))
+        .map(|slot| (slot.value >> 8) as u8)
+}
+
+/// On the Note column a `?` writes its row's `CHA` rather than drawing there, so the track's
+/// `CDLT` and `Thin` reach it; elsewhere, and where a hit is nudged off its row, it draws as it
+/// always has (decision 480).
+#[test]
+fn a_question_mark_on_the_note_column_is_its_rows_chance() {
+    let (mut app, _rt) = app_of(1, 16);
+    keys(&mut app, "!C-3 C-3?30 C-3?70 C-3<Enter>");
+    assert_eq!(
+        line(&app, 0),
+        "C-3 . . . C-3 . . . C-3 . . . C-3 . . .",
+        "every hit lands"
+    );
+    assert_eq!(chance_on(&app, 0), None);
+    assert_eq!(chance_on(&app, 4), Some(0x4D), "30%");
+    assert_eq!(chance_on(&app, 8), Some(0xB3), "70%");
+    assert_eq!(chance_on(&app, 12), None);
+    // On Velocity there's no note to give a chance to: the draw decides, and no `CHA` is written.
+    let (mut app, _rt) = app_of(1, 16);
+    keys(&mut app, "!C-3<Esc>[s[s<Enter>l!7F?50<Esc>[s[s<Enter>");
+    assert!((0..16).all(|row| chance_on(&app, row).is_none()));
+    // A triplet's middle hit is nudged off its row, which a cell can't hold with a `CHA` too, so
+    // it draws as before.
+    let (mut app, _rt) = app_of(1, 16);
+    keys(&mut app, "![C-3 C-3? C-3]<Enter>");
+    assert!((0..16).all(|row| chance_on(&app, row).is_none()));
+}

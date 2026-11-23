@@ -47,6 +47,11 @@ pub struct Own {
     /// Whether it has a `?`, which draws from the seed, so it has `Vary`.
     #[serde(skip)]
     pub chances: bool,
+    /// Whether a `?`'s hit lands on its row whatever its chance, the chance kept for the row's
+    /// `CHA` rather than drawn here: a `Mini` on the Note column's, so the track's `CDLT` and
+    /// `Thin` reach it (decision 480).
+    #[serde(skip)]
+    pub keeps_chance: bool,
     /// The pass it plays, counted from the first, which [`Shape::on_pass`](super::Shape::on_pass)
     /// sets while it [`laps`](Own::laps).
     #[serde(skip)]
@@ -74,6 +79,7 @@ impl Default for Own {
             laps: false,
             ratchets: false,
             chances: false,
+            keeps_chance: false,
             pass: 0,
             skip: 0,
         }
@@ -351,6 +357,11 @@ pub(super) struct Lands {
     /// How far from its row it falls, in rows, early below 0: a third of a row for a triplet's
     /// hit, which a `Mini` on the Note column nudges off its row (decision 462).
     pub(super) off: f64,
+    /// Its `?`'s chance in percent, 100 with none, and whether the seed's draw for it played: a
+    /// hit that [`Own::keeps_chance`] landed whatever the draw falls back on it where its row
+    /// can't hold a `CHA`.
+    pub(super) chance: u8,
+    pub(super) drawn: bool,
 }
 
 /// Each hit the line lands over `count` rows counted, on a pass, in order and once a row: the
@@ -406,10 +417,10 @@ pub(super) fn walk_dropping(
                     }
                     return;
                 }
-                let plays = landed.chance >= 100
+                let drawn = landed.chance >= 100
                     || mix(seed ^ CHANCE ^ u64::from(landed.hit), nth) % 100
                         < u64::from(landed.chance);
-                if plays {
+                if drawn || own.keeps_chance {
                     taken.set(nth);
                     if nth < skip {
                         return;
@@ -420,6 +431,8 @@ pub(super) fn walk_dropping(
                         ratchet: landed.ratchet,
                         len: landed.end - landed.at,
                         off: landed.at - row as f64,
+                        chance: landed.chance.min(100) as u8,
+                        drawn,
                     });
                 }
             },
@@ -510,19 +523,31 @@ fn ratcheted(cell: &mut GenCell, step: Option<&Step>, apart: u16) {
     let Some(step) = step else {
         return;
     };
-    let (note, velocity, gate) = match *cell {
-        GenCell::Pitch(note) => (crate::step::Note::On(note), step.velocity, step.gate),
+    let row_fx = || std::array::from_fn(|slot| step.fx.get(slot).copied().unwrap_or_default());
+    let (note, velocity, gate, mut fx) = match *cell {
+        GenCell::Pitch(note) => (
+            crate::step::Note::On(note),
+            step.velocity,
+            step.gate,
+            row_fx(),
+        ),
         GenCell::Note {
             note,
             velocity,
             gate,
-        } => (note, velocity, gate),
+        } => (note, velocity, gate, row_fx()),
+        // A `?`'s `CHA` put in first (decision 480).
+        GenCell::NoteFx {
+            note,
+            velocity,
+            gate,
+            fx,
+        } => (note, velocity, gate, fx),
         GenCell::Under if matches!(step.note, crate::step::Note::On(_)) => {
-            (step.note, step.velocity, step.gate)
+            (step.note, step.velocity, step.gate, row_fx())
         }
         _ => return,
     };
-    let mut fx = std::array::from_fn(|slot| step.fx.get(slot).copied().unwrap_or_default());
     let slots = step.fx.len().min(fx.len());
     let open = &mut fx[..slots];
     if open
@@ -545,6 +570,42 @@ fn ratcheted(cell: &mut GenCell, step: Option<&Step>, apart: u16) {
         gate,
         fx,
     };
+}
+
+/// A note's cell with its `?`'s chance as a `CHA` of its own, `percent` of the time, in the row's
+/// `CHA` if it has one or else its first empty FX slot, so the engine rolls it as the row plays
+/// and the track's `CDLT` and `Thin` reach it (decision 480). None where the row can't hold one:
+/// its note is nudged off the row, or it has no slot free.
+pub(super) fn chanced(cell: GenCell, step: &Step, percent: u8) -> Option<GenCell> {
+    let (note, velocity, gate) = match cell {
+        GenCell::Pitch(note) => (crate::step::Note::On(note), step.velocity, step.gate),
+        GenCell::Note {
+            note,
+            velocity,
+            gate,
+        } => (note, velocity, gate),
+        _ => return None,
+    };
+    let mut fx: [FxSlot; crate::constants::FX_SLOTS] =
+        std::array::from_fn(|slot| step.fx.get(slot).copied().unwrap_or_default());
+    let slots = step.fx.len().min(fx.len());
+    let open = &mut fx[..slots];
+    let at = open
+        .iter()
+        .position(|slot| slot.command == Some(FxCommand::Cha))
+        .or_else(|| open.iter().position(|slot| slot.command.is_none()))?;
+    let value = (u16::from(percent.min(100)) * 255 + 50) / 100;
+    open[at] = FxSlot {
+        command: Some(FxCommand::Cha),
+        value: value << 8,
+        ..FxSlot::default()
+    };
+    Some(GenCell::NoteFx {
+        note,
+        velocity,
+        gate,
+        fx,
+    })
 }
 
 /// A line typed on a generator, kept beside its shape, as a text of any length can't go in one:
