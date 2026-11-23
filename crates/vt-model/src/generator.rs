@@ -89,6 +89,21 @@ enum Owns {
     /// A note's velocity, gate and nudge, for `Divisions`, which nudges its triplets off the
     /// rows.
     Timed,
+    /// Those and the row's FX, for a `Mini` whose `?`s are its rows' `CHA`s and whose hits
+    /// between rows are nudged (decision 480).
+    TimedFx,
+}
+
+impl Owns {
+    /// Whether it owns a row's nudge.
+    fn nudge(self) -> bool {
+        matches!(self, Self::Timed | Self::TimedFx)
+    }
+
+    /// Whether it owns a row's FX.
+    fn fx(self) -> bool {
+        matches!(self, Self::NoteFx | Self::TimedFx)
+    }
 }
 
 /// What a shape owns of each row.
@@ -115,6 +130,8 @@ fn owns(shape: &Shape) -> Owns {
         FillKind::Tonnetz if shape.tonnetz.voice == Some(TonnetzVoice::Chord) => Owns::NoteFx,
         // An `Own` rhythm's `x*3` in a row is a `RET` in one of its FX slots (decision 461), and
         // a `Mini`'s `C-3*3`; a `Mini`'s hit between rows is nudged.
+        // A `Mini`'s `?` on the Note column is its row's `CHA` (decision 480).
+        FillKind::Mini if shape.mini.chances && shape.kit.is_none() => Owns::TimedFx,
         FillKind::Mini if shape.mini.ratchets => Owns::NoteFx,
         FillKind::Mini => Owns::Timed,
         _ if matches!(shape.place, Where::Own(own) if own.ratchets) && shape.kind.has_where() => {
@@ -138,10 +155,10 @@ fn copy(column: ShapeColumn, owns: Owns, from: &Step, to: &mut Step) {
             if whole {
                 to.gate = from.gate;
             }
-            if owns == Owns::Timed {
+            if owns.nudge() {
                 to.nudge = from.nudge;
             }
-            if owns == Owns::NoteFx {
+            if owns.fx() {
                 copy_fx(from, to);
             }
         }
@@ -175,10 +192,10 @@ pub fn lay_under(generator: &Generator, under: &Step, view: &mut RowView) {
             if whole {
                 view.gate = under.gate;
             }
-            if owns == Owns::Timed {
+            if owns.nudge() {
                 view.nudge = under.nudge;
             }
-            if owns == Owns::NoteFx {
+            if owns.fx() {
                 for slot in 0..FX_SLOTS {
                     view.set_fx(slot, fx(slot));
                 }
@@ -197,7 +214,7 @@ fn cell(column: ShapeColumn, owns: Owns, step: &Step) -> Step {
     if let ShapeColumn::Fx { slot, .. } = column {
         cell.fx = vec![FxSlot::default(); slot + 1];
     }
-    if owns == Owns::NoteFx {
+    if owns.fx() {
         cell.fx = vec![FxSlot::default(); step.fx.len()];
     }
     copy(column, owns, step, &mut cell);
@@ -213,8 +230,8 @@ fn same(column: ShapeColumn, owns: Owns, ours: bool, a: &Step, b: &Step) -> bool
             a.note == b.note
                 && ((!ours && !whole) || a.velocity == b.velocity)
                 && (!whole || a.gate == b.gate)
-                && (owns != Owns::Timed || a.nudge == b.nudge)
-                && (owns != Owns::NoteFx || a.fx == b.fx)
+                && (!owns.nudge() || a.nudge == b.nudge)
+                && (!owns.fx() || a.fx == b.fx)
         }
         ShapeColumn::Velocity => a.velocity == b.velocity,
         ShapeColumn::Nudge { .. } => a.nudge == b.nudge,

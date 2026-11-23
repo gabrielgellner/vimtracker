@@ -113,7 +113,14 @@ pub(super) fn render<F: FnMut(usize, &Shaped, Option<usize>)>(
     texts: Texts,
     out: &mut Out<'_, F>,
 ) {
-    let line = shape.mini;
+    // On the Note column a `?` is its row's `CHA` rather than a draw here, but on a kit line,
+    // whose `?` falls the same on every track it spans (decision 480).
+    let line = Own {
+        keeps_chance: shape.mini.chances
+            && shape.kit.is_none()
+            && matches!(column, ShapeColumn::Note { .. }),
+        ..shape.mini
+    };
     let len = out.cells.len();
     let most = most_nudge(TICKS_PER_STEP);
     // A kit line's track plays only where its name is: every other row rests.
@@ -165,6 +172,16 @@ pub(super) fn render<F: FnMut(usize, &Shaped, Option<usize>)>(
         let cell = match column {
             ShapeColumn::Note { .. } if nudge != 0.0 => timed(cell, step, nudge as i8),
             _ => cell,
+        };
+        // A `?`'s chance goes in its row's `CHA`, which the engine rolls; where the row can't
+        // hold one, the seed's draw decides it here, as it always has.
+        let cell = match (line.keeps_chance && lands.chance < 100, lands.drawn) {
+            (false, _) => cell,
+            (true, drawn) => match own::chanced(cell, step, lands.chance) {
+                Some(chanced) => chanced,
+                None if drawn => cell,
+                None => return,
+            },
         };
         out.cells[lands.nth] = cell;
         (out.seen)(row, &Shaped::note(value), Some(usize::from(lands.hit)));

@@ -152,10 +152,10 @@ e4992372bf924ca0 Mask bits on Note, chromatic
 910a946a4bec90c4 Mini on FX, fine
 69d0abcd3ca548c7 Mini on FX, last slot
 cdb26eeca83b4405 Mini on Length
-3d7f9f347809da99 Mini on Note of its own, chromatic
-49fb2c1e8f587204 Mini on Note of its own, in key
-fe2b1a2553491485 Mini on Note, chromatic
-52d046991f2ba3d1 Mini on Note, in key
+b0bfef5bbbe81a6f Mini on Note of its own, chromatic
+1149c04c480d581d Mini on Note of its own, in key
+25594acde9acab5f Mini on Note, chromatic
+d8c55847a3a041dd Mini on Note, in key
 5fbc0aee48f9870b Mini on Nudge
 95d0edef1a3ba124 Mini on Velocity
 cc6fff711a20b727 Multiply on FX, event
