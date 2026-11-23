@@ -109,14 +109,16 @@ const MASTER_OUTPUT: [&[Control]; 2] = [&[Control::Trim, Control::Level], &[Cont
 /// The Play device's title: how often its steps jump to any row of their phrase, which is how
 /// the rows are walked, as the phrase's order is (decision 391), then how far every row's chance
 /// to play is moved, which is whether they're played (decision 405), and whether that chance
-/// decides each row or each pulse (decision 406), then its dice loop, how many steps' dice repeat,
+/// decides each row or each pulse (decision 406), and how they're thinned (decision 479), then
+/// its dice loop, how many steps' dice repeat,
 /// how often they roll again and how often a step takes another's (decisions 410 and 411), how
 /// late every other step lands on top of the groove (decision 420), and last how much quieter a
 /// soft note plays than a full one (decision 478), as the grid is full.
-const PLAY_TITLE: [Option<Control>; 8] = [
+const PLAY_TITLE: [Option<Control>; 9] = [
     Some(base(TrackControl::Jump)),
     Some(base(TrackControl::ChanceDelta)),
     Some(base(TrackControl::ChanceTarget)),
+    Some(base(TrackControl::Thin)),
     Some(base(TrackControl::DiceLoop)),
     Some(base(TrackControl::DiceMutate)),
     Some(base(TrackControl::DiceJump)),
@@ -153,16 +155,11 @@ fn machine(machine: Machine) -> DeviceSpec {
     };
     let mut device = DeviceSpec::new(
         "Machine",
-        [
-            Some(Control::Machine),
-            kind,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-        ],
+        std::array::from_fn(|at| match at {
+            0 => Some(Control::Machine),
+            1 => kind,
+            _ => None,
+        }),
         machine.grid(),
         Control::Setting,
     );

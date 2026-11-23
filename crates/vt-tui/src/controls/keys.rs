@@ -61,6 +61,7 @@ pub fn key(control: Control, track: &Track) -> &'static str {
             TrackControl::PhraseStart => "phrasestart",
             TrackControl::ChanceDelta => "chance",
             TrackControl::ChanceTarget => "chancetarget",
+            TrackControl::Thin => "thin",
             TrackControl::Cue => "cue",
             TrackControl::DiceLoop => "diceloop",
             TrackControl::DiceMutate => "dicemutate",

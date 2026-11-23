@@ -392,7 +392,7 @@ const TRACK_GROUPS: [&str; 16] = [
 
 /// The track's own settings added since places were fixed, at the end of the table so none moves
 /// (#718): the track's own after [`TRACK`]'s, in the order they came.
-const LATER_TRACK: [Entry; 27] = [
+const LATER_TRACK: [Entry; 28] = [
     // Whether a synth's oscillators run on from note to note or start again on each, read as a
     // note starts, so a lock on its row sets it for that note (decision 370).
     Entry {
@@ -684,14 +684,34 @@ const LATER_TRACK: [Entry; 27] = [
         default: DEFAULT_VELOCITY_RANGE,
         place: Place::Own,
     },
+    // How `CDLT` and `CHA` thin the track: where each row's draw against its chance comes from,
+    // read as the row's chance is decided, so a lock on its row sets it for that row (decision
+    // 479).
+    Entry {
+        meaning: "how CDLT thins the track: at random, by each row's chance, by the beat or evenly",
+        key: "thin",
+        name: "Thin",
+        label: Some("THIN"),
+        kind: Kind::Stepped {
+            choices: &THIN_NAMES,
+            wraps: false,
+        },
+        default: 0,
+        place: Place::Own,
+    },
 ];
 /// What each of [`LATER_TRACK`] is listed with.
-const LATER_TRACK_GROUPS: [&str; 27] = [
+const LATER_TRACK_GROUPS: [&str; 28] = [
     "Machine", "Machine", "Filter", "Machine", "Machine", "Filter", "Filter", "Filter", "Filter",
     "Filter", "Filter", "Machine", "Machine", "Machine", "Machine", "Machine", "Machine",
     "Machine", "Machine", "Machine", "Machine", "Machine", "Machine", "Machine", "Machine",
-    "Machine", "Machine",
+    "Machine", "Machine", "Machine",
 ];
+
+/// How `CDLT` thins a track, `THIN`'s choices (decision 479): each row's draw against its chance
+/// rolled from the seed; the same for every row, so the rows go by their chances; from where it
+/// falls in the bar; or from its place among the notes, so those left stay evenly spaced.
+pub const THIN_NAMES: [&str; 4] = ["Random", "Chance", "Beats", "Spread"];
 
 /// What a row's chance decides, `CTGT`'s choices: the whole row, or each of its pulses and
 /// ratchets.

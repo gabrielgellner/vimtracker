@@ -73,6 +73,7 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 | `PSTA` | The row the order's window starts on, rows on from the first |
 | `CDLT` | Every row's chance up or down: `80` none, `40` half, `00` none play |
 | `CTGT` | What a row's chance decides: `00` the whole row, `01` each pulse |
+| `THIN` | How `CDLT` thins: `00` Random, `01` Chance, `02` Beats, `03` Spread |
 | `CUE` | A new window or lane waits for its loop, `01`, or moves at once, `00` |
 | `CORD` | The chain's order from the next phrase on: `00` forward, `01` reverse |
 | `CJMP` | The chance each of the chain's next phrases is any of its phrases |
@@ -435,6 +436,32 @@ hits with it, while the row's later pulses still roll their own; the row's locks
 run, as on `Pulse` the chance drops pulses, never the row. The pulses and hits
 after the first are rolled from the `:seed`, so a render repeats and every `CHA` keeps the
 results it had.
+
+The track's `Thin`, after `Target` in the title, `THIN` on a step, is how `CDLT`
+thins it: which notes go first as `CDLT` falls, and come in first as it rises. A
+row plays where its draw is below its chance as `CDLT` moves it, and `Thin` is
+where that draw comes from.
+
+| Thin | As `CDLT` falls |
+|---|---|
+| `Random` | Notes drop at random, as they always have, a track's start |
+| `Chance` | Notes drop in order of their `CHA`, the lowest first |
+| `Beats` | Sixteenths first, then eighths, then beats, the bar's first last |
+| `Spread` | Every other note goes, so those left stay evenly spaced |
+
+`Chance` is the Cirklon's knob mask: every row draws the same, half, so at `80`
+a row plays if its chance is past half and doesn't if it's below, every pass the
+same, and `CDLT` moves where that falls. Give the ghost notes `CHA 4D`, 30%, and
+the eighths `CHA B3`, 70%: at `80` the eighths play and the ghosts don't, below
+`5C` the eighths go too, and up at `C0` the ghosts come in. Rows with no `CHA` are all at 100%,
+so they all go together, at `40`. `Beats` goes by where the row falls in the bar,
+`Spread` by the row's place among the phrase's notes, the van der Corput order, so
+at half every other note plays and at a quarter every fourth. Above `80` the same
+orders bring in the rows a `CHA` keeps out. Every way but `Random` decides the same
+every pass, and a row's pulses and ratchet hits follow its note. A row `Thin` drops
+is dropped as any row its chance drops is: its locks and timing go with it, and a
+condition reads it as it would. It's where held `THIN` starts, so a step's `THIN`
+gives that row its own way, and on the Roto it's on the Play device's `Dice` page.
 
 `Space l` turns fill on or off, and held, it's on until you let go. The status
 line says `FILL` while it's on.

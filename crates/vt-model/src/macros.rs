@@ -686,6 +686,7 @@ impl Track {
             SettingId::CHAIN_ORDER => self.chain_order,
             SettingId::CHAIN_JUMP => self.chain_jump,
             SettingId::VELOCITY_RANGE => self.velocity_range,
+            SettingId::THIN => self.thin,
             SettingId::FILTER_MODE => self.filter_mode.index(),
             SettingId::GATE_LENGTH => self.gate_length(),
             SettingId::GROOVE => self
@@ -825,6 +826,9 @@ impl Track {
                     SettingId::CHAIN_JUMP => self.chain_jump = coarse,
                     SettingId::VELOCITY_RANGE => {
                         self.velocity_range = coarse.min(MOST_VELOCITY_RANGE);
+                    }
+                    SettingId::THIN => {
+                        self.thin = coarse.min(crate::settings::THIN_NAMES.len() as u8 - 1);
                     }
                     SettingId::FILTER_MODE => {
                         self.filter_mode =

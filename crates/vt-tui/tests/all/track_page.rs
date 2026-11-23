@@ -808,8 +808,8 @@ fn k_chooses_an_lfos_destination_from_a_list() {
     let picker = app.overlays.picker.as_ref().unwrap();
     assert_eq!(
         picker.items().len(),
-        83,
-        "what a sample track has, its Sample, Slice, Start, Length and Reverse, its lanes' twenty-one, Pitch in scale, Jump, Chance up or down, Chance target, the dice loop's three, Swing, Velocity range, the filter's Drive, Punch, Low cut and High cut, the seven that move the walk, the chain's order and jump, none, Mod 6's three, its Rate, Shape, Mode and Fade, the accumulator's five and arpeggio's three, and the eight macros"
+        84,
+        "what a sample track has, its Sample, Slice, Start, Length and Reverse, its lanes' twenty-one, Pitch in scale, Jump, Chance up or down, Chance target, Thin, the dice loop's three, Swing, Velocity range, the filter's Drive, Punch, Low cut and High cut, the seven that move the walk, the chain's order and jump, none, Mod 6's three, its Rate, Shape, Mode and Fade, the accumulator's five and arpeggio's three, and the eight macros"
     );
     assert!(
         picker
@@ -1797,7 +1797,7 @@ fn the_track_page_shows_its_settings_in_columns() {
         ),
         (
             29,
-            "╭─ Play  Jump 00  Chance 80  Row  Dice Off  Mutate 00  Dice jump 00  Swing 00  Vel range 18 ─",
+            "╭─ Play  Jump 00  Chance 80  Row  Thin Random  Dice Off  Mutate 00  Dice jump 00  Swing 00  Vel range 18 ─",
         ),
         (
             31,

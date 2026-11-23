@@ -821,6 +821,14 @@ impl TrackState {
         own.unwrap_or(held) + self.moved_by(SettingId::CHANCE_DELTA)
     }
 
+    /// How a row is thinned, as a place in `Thin`'s choices: `own`, a lock of it on the row, or
+    /// what the track holds, under any lock a note on the row would end, with what modulation adds
+    /// (decision 479).
+    pub(crate) fn thin(&self, own: Option<f32>, locks_end: bool) -> f32 {
+        let held = f32::from(self.held_choice(SettingId::THIN, locks_end));
+        own.unwrap_or(held) + self.moved_by(SettingId::THIN)
+    }
+
     /// What a row's chance decides, as a place in `Chance target`'s choices: `own`, a lock of it
     /// on the row, or what the track holds, under any lock a note on the row would end, with what
     /// modulation adds (decision 406).

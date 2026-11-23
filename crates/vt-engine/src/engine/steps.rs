@@ -20,7 +20,7 @@ use vt_model::step::{
     FxCommand, FxSlot, GateKind, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, Note, Step, most_nudge,
 };
 use vt_model::variation::{
-    Roll, Variation, Varies, kept, thin_keeps, varied_lock, varied_ratchet, varies_at,
+    Roll, Thin, Variation, Varies, kept, thin_keeps, varied_lock, varied_ratchet, varies_at,
 };
 
 use crate::gens::{Passes, Played, RowAt};
@@ -731,6 +731,17 @@ impl Engine {
         // whether the row's run, with the chances moved by the `CDLT` the row reads before its
         // locks run.
         let moved = self.row_chance_delta(index, &fx.fx, &step, first);
+        // Where the row's draw comes from, `THIN`, and the draw itself where it's fixed rather
+        // than rolled (decision 479).
+        let thin = self.row_thin(index, &fx.fx, &step, first);
+        let draw = match thin {
+            Thin::Spread => {
+                let (note, notes) =
+                    phrase.map_or((0, 1), |phrase| note_place(phrase, position.step));
+                thin.draw(position.step, note, notes)
+            }
+            _ => thin.draw(position.step, 0, 1),
+        };
         // With `Chance target` on `Pulse`, the share each of the row's pulses and ratchet hits
         // plays with (decision 406).
         let share = self
@@ -740,7 +751,15 @@ impl Engine {
             Some(decided) => decided,
             None => {
                 let strikes = matches!(step.note, Note::On(_));
-                self.decide_row(index, &fx.fx, &pending, position, strikes, moved, share)
+                self.decide_row(
+                    index,
+                    &fx.fx,
+                    &pending,
+                    position,
+                    strikes,
+                    (moved, draw),
+                    share,
+                )
             }
         };
         let plays = decided.note;
@@ -934,7 +953,10 @@ impl Engine {
             fx.retrigger = None;
         }
         // Each hit rolls the dice of the step the dice loop holds, if it's on.
-        let keep = share.map(|share| ((pending.seed, pending.rolls()), share));
+        // A fixed draw decides every hit as it decided the note, so they all play with it.
+        let keep = share
+            .filter(|_| draw.is_none())
+            .map(|share| ((pending.seed, pending.rolls()), share));
         self.time_note(index, &fx, start_at, pending.ticks, accumulating, keep);
     }
 
@@ -1127,6 +1149,19 @@ impl Engine {
         self.tracks[index].chance_delta(own, note)
     }
 
+    /// How a row is thinned, `THIN`: a lock of it among the row's FX, or what the track holds,
+    /// under any lock a note on the row's first pulse would end, with what modulation adds
+    /// (decision 479).
+    fn row_thin(&self, index: usize, fx: &[FxSlot; FX_SLOTS], step: &RowView, first: bool) -> Thin {
+        let own = fx
+            .iter()
+            .rev()
+            .find(|slot| slot.command == Some(FxCommand::Set(SettingId::THIN)))
+            .map(|slot| f32::from(slot.coarse()));
+        let note = first && matches!(step.note, Note::On(_)) && step.gate_kind() != GateKind::Rest;
+        Thin::at(self.tracks[index].thin(own, note))
+    }
+
     /// Whether a row's chance decides each of its pulses and ratchet hits rather than the whole
     /// row: `Chance target` on `Pulse`, a lock of it among the row's FX, or what the track holds,
     /// under any lock a note on the row's first pulse would end, with what modulation adds
@@ -1168,7 +1203,7 @@ impl Engine {
         pending: &PendingStep,
         position: ChainPosition,
         strikes: bool,
-        moved: f32,
+        (moved, draw): (f32, Option<f32>),
         share: Option<f32>,
     ) -> Decided {
         let first = position.pulse == 0;
@@ -1183,13 +1218,17 @@ impl Engine {
             if slot.command != Some(FxCommand::Cha) {
                 continue;
             }
-            // With the dice loop on, the dice of the step it holds; otherwise the track's stream.
-            let rolled = match pending.dice {
-                Some(dice) => {
+            // A fixed draw from `THIN`; with the dice loop on, the dice of the step it holds;
+            // otherwise the track's stream.
+            let rolled = match (draw, pending.dice) {
+                (Some(draw), _) => {
+                    draw < moved_chance(f32::from(slot.coarse()), 255.0, moved) / 255.0
+                }
+                (None, Some(dice)) => {
                     let chance = moved_chance(f32::from(slot.coarse()), 255.0, moved);
                     looped_chance(seed, index, dice, column, chance)
                 }
-                None => self.tracks[index].rng.chance_moved(slot.coarse(), moved),
+                (None, None) => self.tracks[index].rng.chance_moved(slot.coarse(), moved),
             };
             decided.note &= rolled;
             chance = Some(chance.unwrap_or(true) && rolled);
@@ -1201,8 +1240,12 @@ impl Engine {
             })
         };
         if first && strikes && moved < 128.0 && chance.is_none() && !conditioned() {
-            // Thinned by the dice of the step the dice loop holds, if it's on.
-            decided.note &= thin_keeps(seed, index, pending.rolls(), moved);
+            // Thinned by `THIN`'s fixed draw, or by the dice of the step the dice loop holds, if
+            // it's on.
+            decided.note &= match draw {
+                Some(draw) => draw < moved_chance(1.0, 1.0, moved),
+                None => thin_keeps(seed, index, pending.rolls(), moved),
+            };
         }
         // On `Row`, a note its `CHA` or `CDLT` drops takes the row's trig with it, its own FX
         // with its locks, as a failed `CND` does and as an Elektron trig's chance does. A row with
@@ -1230,7 +1273,10 @@ impl Engine {
         } else if let Some(share) = share
             && strikes
         {
-            decided.note &= kept(seed, index, pending.rolls(), 0, share);
+            decided.note &= match draw {
+                Some(draw) => draw < share,
+                None => kept(seed, index, pending.rolls(), 0, share),
+            };
         }
         if pending.part != Part::Whole {
             self.tracks[index].decide(pending.step, decided);
@@ -1789,6 +1835,16 @@ struct NoteVariation {
 /// `Pulse` (decision 406): its `CHA`s' chances, each moved by `moved`, the row's `CDLT`, together;
 /// or with none, under `CDLT` below `80`, the share a row with no `CHA` keeps, unless a condition
 /// decides it; or every time.
+/// A row's place among its phrase's notes, counting from 0, and how many notes the phrase has, for
+/// `THIN`'s `Spread` (decision 479).
+fn note_place(phrase: &Phrase, row: usize) -> (usize, usize) {
+    let strikes = |step: &vt_model::step::Step| matches!(step.note, Note::On(_));
+    let steps = phrase.steps();
+    let before = steps.iter().take(row).filter(|step| strikes(step)).count();
+    let notes = steps.iter().filter(|step| strikes(step)).count();
+    (before, notes.max(1))
+}
+
 fn pulse_share(read: &[FxSlot; FX_SLOTS], moved: f32) -> f32 {
     let mut chances = read
         .iter()
