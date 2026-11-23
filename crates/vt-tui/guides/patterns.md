@@ -136,8 +136,11 @@ and the velocity notes are typed with, and rests everywhere else. A stack is
 natural here, as each layer is other tracks'. A name in two layers is refused,
 as a track plays one, and every track needs a name first, as its number can't be
 a token: `:name` them. An edit to the line on any of its tracks is made on all of
-them as one change, so a `?` falls the same on every track. How tracks join and
-leave a kit line is under **A kit line** in the editing guide.
+them as one change, so a `?` falls the same on every track. As you type one with
+`!`, its buffer sits at the foot of the screen, and the columns beside the grid
+show every drum's notes as they're written, the token under the cursor lighting
+its rows on each. How tracks join and leave a kit line is under **A kit line** in
+the editing guide.
 
 ## Chance
 

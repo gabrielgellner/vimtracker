@@ -482,6 +482,15 @@ impl Buffer<'_> {
         self.paint(frame, window, laid);
     }
 
+    /// Draw it at the foot of the area from a column, so what's above it stays in sight: a line
+    /// across tracks, whose tracks' columns are the overview's (decision 482).
+    pub(crate) fn draw_at_foot(self, frame: &mut Frame, area: Rect, column: u16) {
+        let laid = self.lay_out(area);
+        let row = area.bottom().saturating_sub(laid.height + 1);
+        let window = popup::below(area, row, column, laid.width, laid.height);
+        self.paint(frame, window, laid);
+    }
+
     /// Draw it under a row beside a span of the screen, its left and right edges: right of it,
     /// or where there's no room there, left of it, so what's under it stays in sight (decision
     /// 474), and where neither side has room, as far right as it fits, over as little of the

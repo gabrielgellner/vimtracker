@@ -1069,7 +1069,10 @@ doesn't read on that column, the status line says why.
 
 On a `W` selection across tracks, each gets its own pattern, a stack giving each a layer, and
 across two or more tracks of one group, on their Note columns, `!` makes a kit line, its hits the
-tracks' names (see **A kit line**), refused as `S` refuses it while a track has no name.
+tracks' names (see **A kit line**), refused as `S` refuses it while a track has no name. A line
+across tracks opens its buffer at the foot of the screen instead, so the other tracks' columns
+beside the grid stay in sight, and each lights the rows the token under the cursor writes on its
+track, as the grid lights yours: move onto `sn` and the snare's hits light in its column.
 
 ## Fields of tokens
 
