@@ -145,6 +145,9 @@ pub enum Kind {
     Open(Bracket),
     /// A bracket closing one.
     Close(Bracket),
+    /// `|`, between the choices of a `[ ]` one of which is picked at random each time round, as
+    /// Tidal's `[a|b|c]` (decision 481).
+    Pick,
     /// Text the grammar can't read as a token.
     Unread,
 }
@@ -353,6 +356,7 @@ pub(crate) mod tests {
             Kind::Rest => "nothing, {}",
             Kind::Modifier => "a change to what's before it",
             Kind::Open(_) | Kind::Close(_) => "a group",
+            Kind::Pick => "a choice at random",
             Kind::Unread => "what doesn't read",
             Kind::Weight | Kind::Move | Kind::Bit | Kind::Hit => "",
         },

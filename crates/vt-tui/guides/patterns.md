@@ -82,6 +82,13 @@ second nudged `+8` and the third `-8`. Two hits on one row keep the first, and
 the status line says how many were dropped and which `Step` would keep them
 all: `2 hits share a row and dropped; Step 3 rows keeps them`.
 
+`[a|b|c]` picks one of its choices at random each time it comes round, as Tidal's
+`|` does, so `7F [40|60|20]` on Velocity gives the second beat one of three
+velocities. A choice is everything between two `|`s, so `[C-3 C-3|C-3 C-3 C-3]`
+is two notes or three, never a mix. It draws from the fill's seed, as a `?` on the
+other columns does: the same picks each pass until `Vary` draws again. A `|`
+goes only inside `[ ]`, and every choice needs something in it.
+
 `< >` takes the next of its choices each time the line comes round, a lap, and
 counts on from pass to pass, so `<C-2 F-2 G-2>` on a line that's one lap a
 phrase changes the root each pass, round a three-pass cycle. The phrase holds
@@ -169,9 +176,9 @@ draws as their first pass; kept live with `L`, they go on pass to pass.
 - **Euclid's third number moves the hits later**, as `Rotate` does; Tidal's
   moves them earlier.
 - **A chance is a percent:** `?30` plays 30 hits in 100, as `Chance` counts.
-- **Not here:** `/`, `{ }`, `|` and `..` aren't read, and a line has no
-  functions, `every` or `fast`: what varies a line from pass to pass is `< >`,
-  `?`, `Vary` and the other generators.
+- **Not here:** `/`, `{ }` and `..` aren't read, and a line has no functions,
+  `every` or `fast`: what varies a line from pass to pass is `< >`, `?`, `|`,
+  `Vary` and the other generators.
 
 ## Recipes
 
@@ -197,6 +204,10 @@ rows`: `<C-2 F-2 G-2 D#2>`. One long note a pass, a new root each time round.
 
 **A triplet fill.** Note column, `Step 4 rows`: `1 . 3 [5 3 1]`. The last beat
 is three notes, the middle two nudged off the rows.
+
+**Velocities from a choice.** Velocity of a hat with a note on every row, `Step 1
+row`: `7F [40|60|20] [40|60] [20|40]`. Every beat starts on the accent, and the
+rest of it picks among soft velocities, a different mix each time round.
 
 **Accents with a chance.** Velocity of a hat, `Step 4 rows`:
 `7F 30 [50 30] 30?40`. An accent on the first beat, a pair of eighths on the

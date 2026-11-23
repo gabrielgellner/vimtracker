@@ -23,6 +23,8 @@ use crate::step::{FxCommand, FxSlot, Step};
 
 /// What a `?`'s draws are for, so they don't follow a `Chance`'s.
 const CHANCE: u64 = 0x0A11_0000;
+/// What a `[a|b]`'s pick draws with, apart from a `?`'s draws (decision 481).
+const PICK: u64 = 0x0B1C_0000;
 /// The most rows a top-level token is.
 pub const MAX_STEP: u8 = 16;
 /// The furthest a `RET` puts its repeats apart, in units, its value's low digit.
@@ -44,7 +46,7 @@ pub struct Own {
     /// generator owns the row's FX.
     #[serde(skip)]
     pub ratchets: bool,
-    /// Whether it has a `?`, which draws from the seed, so it has `Vary`.
+    /// Whether it has a `?` or a `|`, which draw from the seed, so it has `Vary`.
     #[serde(skip)]
     pub chances: bool,
     /// Whether a `?`'s hit lands on its row whatever its chance, the chance kept for the row's
@@ -101,7 +103,9 @@ impl Own {
             ratchets: beats
                 .iter()
                 .any(|beat| beat.fast > 1 && matches!(beat.what, What::Hit(_))),
-            chances: beats.iter().any(|beat| beat.chance < 100),
+            chances: beats
+                .iter()
+                .any(|beat| beat.chance < 100 || beat.what == What::Pick),
             ..self
         }
     }
@@ -118,6 +122,9 @@ pub enum What {
     Group,
     /// `< >`: one of its beats each lap.
     Choice,
+    /// `[a|b|c]`: one of its choices, each a group, at random each time round, drawn from the
+    /// seed, as Tidal's `|` (decision 481).
+    Pick,
 }
 
 /// One token of a typed rhythm, compiled: what it is with its modifiers, and how many beats its
@@ -221,6 +228,7 @@ fn group(
     at: usize,
     (start, len): (f64, f64),
     lap: u64,
+    seed: u64,
     chance: u32,
     land: &mut impl FnMut(Landed),
 ) {
@@ -233,7 +241,7 @@ fn group(
         let beat = beats[child];
         let share = len * f64::from(beat.weight) / f64::from(total);
         for _ in 0..beat.repeat {
-            place(beats, child, (from, share), lap, chance, land);
+            place(beats, child, (from, share), lap, seed, chance, land);
             from += share;
         }
     }
@@ -245,6 +253,7 @@ fn place(
     at: usize,
     (start, len): (f64, f64),
     lap: u64,
+    seed: u64,
     chance: u32,
     land: &mut impl FnMut(Landed),
 ) {
@@ -256,11 +265,11 @@ fn place(
             for nth in 0..parts {
                 if hits & 1 << nth != 0 {
                     let from = start + f64::from(nth) * part;
-                    fast(beats, at, (from, part), lap, chance, land);
+                    fast(beats, at, (from, part), lap, seed, chance, land);
                 }
             }
         }
-        _ => fast(beats, at, (start, len), lap, chance, land),
+        _ => fast(beats, at, (start, len), lap, seed, chance, land),
     }
 }
 
@@ -271,13 +280,14 @@ fn fast(
     at: usize,
     (start, len): (f64, f64),
     lap: u64,
+    seed: u64,
     chance: u32,
     land: &mut impl FnMut(Landed),
 ) {
     let beat = beats[at];
     let times = beat.fast.max(1);
     if times == 1 {
-        return inner(beats, at, (start, len), lap, chance, land);
+        return inner(beats, at, (start, len), lap, seed, chance, land);
     }
     if let What::Hit(hit) = beat.what
         && len / f64::from(times) < 1.0
@@ -301,6 +311,7 @@ fn fast(
             at,
             (start + f64::from(nth) * part, part),
             lap,
+            seed,
             chance,
             land,
         );
@@ -313,6 +324,7 @@ fn inner(
     at: usize,
     (start, len): (f64, f64),
     lap: u64,
+    seed: u64,
     chance: u32,
     land: &mut impl FnMut(Landed),
 ) {
@@ -325,7 +337,19 @@ fn inner(
             ratchet: 1,
         }),
         What::Rest => {}
-        What::Group => group(beats, at, (start, len), lap, chance, land),
+        What::Group => group(beats, at, (start, len), lap, seed, chance, land),
+        // One choice at random each time round, by the seed, the pick's place and the lap, so it's
+        // the same each pass until `Vary` draws again, as a `?` is (decision 481).
+        What::Pick => {
+            let choices = children(beats, at).count() as u64;
+            if choices == 0 {
+                return;
+            }
+            let picked = mix(seed ^ PICK ^ at as u64, lap as usize) % choices;
+            if let Some(child) = children(beats, at).nth(picked as usize) {
+                place(beats, child, (start, len), lap, seed, chance, land);
+            }
+        }
         What::Choice => {
             let laps: u32 = children(beats, at).map(|child| beats[child].places()).sum();
             if laps == 0 {
@@ -337,7 +361,7 @@ fn inner(
                 if left < places {
                     // A choice inside takes its own turn each time this one comes round to it.
                     let lap = lap / u64::from(laps);
-                    return place(beats, child, (start, len), lap, chance, land);
+                    return place(beats, child, (start, len), lap, seed, chance, land);
                 }
                 left -= places;
             }
@@ -402,6 +426,7 @@ pub(super) fn walk_dropping(
             0,
             (0.0, line as f64),
             before.wrapping_add(lap as u64),
+            seed,
             100,
             &mut |landed: Landed| {
                 // The row nearest it, within its own place.

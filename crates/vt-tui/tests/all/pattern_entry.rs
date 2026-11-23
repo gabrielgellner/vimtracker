@@ -495,3 +495,42 @@ fn a_question_mark_on_the_note_column_is_its_rows_chance() {
         app.services.status
     );
 }
+
+/// `[a|b|c]` picks one of its choices at random each time round, a choice being a whole run, as
+/// Tidal's `|` (decision 481).
+#[test]
+fn a_bar_picks_one_choice_at_random_each_time_round() {
+    // On Velocity over 32 rows, a token a row: each row one of three velocities.
+    let (mut app, _rt) = app_of(1, 32);
+    keys(&mut app, "!C-3<Esc>[s[s<Enter>l![7F|40|20]<Esc>[s[s<Enter>");
+    let velocities: std::collections::BTreeSet<u8> = app.song().tracks[0].phrases[&0]
+        .steps()
+        .iter()
+        .filter_map(|step| step.velocity)
+        .collect();
+    assert!(
+        velocities.iter().all(|v| [0x7F, 0x40, 0x20].contains(v)),
+        "{velocities:?}"
+    );
+    assert!(velocities.len() > 1, "more than one picked: {velocities:?}");
+    // On Note, a choice is a run: each beat is two notes or three, never a mix.
+    let (mut app, _rt) = app_of(1, 32);
+    keys(&mut app, "![C-3 C-3|C-3 C-3 C-3]<Enter>");
+    let notes = notes(&app, 0);
+    for beat in notes.chunks(4) {
+        let count = beat.iter().filter(|note| *note == "C-3").count();
+        assert!(count == 2 || count == 3, "{beat:?}");
+    }
+    // A `|` outside a `[ ]`, or with nothing beside it, doesn't read, and says why.
+    let why = |typed: &str| {
+        let (mut app, _rt) = app_of(1, 16);
+        keys(&mut app, typed);
+        panel(&app)
+            .tokens
+            .as_ref()
+            .and_then(|tokens| tokens.field.bad().map(|bad| bad.why.clone()))
+            .unwrap_or_default()
+    };
+    assert!(why("!C-3|D-3").contains("between the choices of a [ ]"));
+    assert!(why("![C-3|").contains("has nothing in it"));
+}

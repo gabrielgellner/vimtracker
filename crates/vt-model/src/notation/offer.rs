@@ -126,6 +126,7 @@ pub fn groups(rest: &str) -> Vec<Offer> {
     vec![
         offer("[ ]", "a group: split its place"),
         offer("< >", "one of them each lap"),
+        offer("[ | ]", "one of them at random each time round"),
         offer(rest, "a rest, in place of the group"),
     ]
 }
@@ -196,6 +197,6 @@ mod tests {
 
     #[test]
     fn a_groups_place_takes_another_group_or_a_rest() {
-        assert_eq!(texts(&groups(".")), ["[ ]", "< >", "."]);
+        assert_eq!(texts(&groups(".")), ["[ ]", "< >", "[ | ]", "."]);
     }
 }

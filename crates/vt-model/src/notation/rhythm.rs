@@ -54,6 +54,9 @@ pub(super) static RHYTHM: Grammar = Grammar {
              places, @n makes it n places long, ? plays it half the time and ?30 30% of it"
         }
         Kind::Value => "one of a Euclid's numbers: its hits, its parts, then how many parts later",
+        Kind::Pick => {
+            "between the choices of a [ ]: one of them is picked at random each time round"
+        }
         Kind::Open(Bracket::Square) | Kind::Close(Bracket::Square) => {
             "a group: its tokens share its place"
         }
@@ -97,9 +100,9 @@ pub(super) static RHYTHM: Grammar = Grammar {
     to_setting: as_it_is,
 };
 
-/// Whether a character ends a word: a space, a comma or a bracket.
+/// Whether a character ends a word: a space, a comma, a bracket or a `|`.
 pub(super) fn ends(c: char) -> bool {
-    c.is_whitespace() || c == ',' || Bracket::of(c).is_some()
+    c.is_whitespace() || c == ',' || c == '|' || Bracket::of(c).is_some()
 }
 
 /// A modifier's mark.
@@ -122,6 +125,8 @@ fn split_rhythm(text: &str) -> Vec<Token> {
         };
         let token = if c.is_whitespace() || c == ',' {
             continue;
+        } else if c == '|' {
+            Token::new(Kind::Pick, at..at + 1)
         } else if let Some((bracket, opens)) = Bracket::of(c) {
             let kind = if opens {
                 Kind::Open(bracket)
@@ -197,6 +202,9 @@ impl Reader<'_, '_> {
         opened: Option<(Bracket, usize)>,
         depth: usize,
     ) -> Result<(), Bad> {
+        // Where the choice being read starts, in a `[ ]` with a `|`, and whether there's one.
+        let mut choice = head + 1;
+        let mut picks = false;
         loop {
             let Some(token) = self.peek().cloned() else {
                 if let Some((bracket, at)) = opened {
@@ -206,9 +214,25 @@ impl Reader<'_, '_> {
                 break;
             };
             match token.kind {
+                Kind::Pick => {
+                    if !opened.is_some_and(|(open, _)| open == Bracket::Square) {
+                        return Err(bad(
+                            token.at.start,
+                            "| goes between the choices of a [ ], as [x|. x]",
+                        ));
+                    }
+                    self.next += 1;
+                    self.choice(choice, token.at.start)?;
+                    choice = self.beats.len();
+                    picks = true;
+                }
                 Kind::Close(bracket) => {
                     if opened.is_some_and(|(open, _)| open == bracket) {
                         self.next += 1;
+                        if picks {
+                            self.choice(choice, token.at.start)?;
+                            self.beats[head].what = What::Pick;
+                        }
                         break;
                     }
                     let (open, close) = brackets(bracket);
@@ -250,6 +274,17 @@ impl Reader<'_, '_> {
             }
         }
         self.beats[head].size = u16::try_from(self.beats.len() - head).unwrap_or(u16::MAX);
+        Ok(())
+    }
+
+    /// The beats read since `from`, one of a `[ ]`'s choices between `|`s, made a group of their
+    /// own, so the pick takes them whole (decision 481).
+    fn choice(&mut self, from: usize, at: usize) -> Result<(), Bad> {
+        if from == self.beats.len() {
+            return Err(bad(at, "A choice between | and | has nothing in it"));
+        }
+        self.beats.insert(from, Beat::new(What::Group));
+        self.beats[from].size = u16::try_from(self.beats.len() - from).unwrap_or(u16::MAX);
         Ok(())
     }
 
