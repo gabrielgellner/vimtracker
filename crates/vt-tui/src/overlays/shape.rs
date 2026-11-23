@@ -1736,6 +1736,38 @@ impl ShapePanel {
         }
     }
 
+    /// The group the pattern's one track is a drum of, and its drums' names, where it's a pattern
+    /// on one track's Note column whose group has two or more named tracks, as a kit line would
+    /// span: for the status line to say how to enter one across them (decision 483).
+    fn kit_drums(&self, services: &Services) -> Option<(u8, Vec<String>)> {
+        let part = self.parts.first()?;
+        let alone = self.parts.iter().all(|other| other.track == part.track);
+        if self.pattern.is_none()
+            || self.shape.kit.is_some()
+            || !alone
+            || !matches!(part.column, ShapeColumn::Note { .. })
+        {
+            return None;
+        }
+        let song = services.song();
+        let group = song.tracks.get(part.track)?.group?;
+        let names: Vec<String> = song
+            .tracks
+            .iter()
+            .filter(|track| track.group == Some(group) && !track.name.trim().is_empty())
+            .map(|track| track.name.trim().to_lowercase())
+            .collect();
+        (names.len() >= 2).then_some((group, names))
+    }
+
+    /// Whether the word where a pattern's text stops reading is the name of a drum of the group
+    /// its one track is in, typed as a kit line's hit would be.
+    fn names_a_drum(&self, text: &str, at: usize, services: &Services) -> bool {
+        let word = word_at(text, at).to_lowercase();
+        self.kit_drums(services)
+            .is_some_and(|(_, names)| names.contains(&word))
+    }
+
     /// Where a `Mini`'s `?` on the Note column lands on a row with no FX slot free for its `CHA`,
     /// so the seed decides it there instead, as the status line says it (decision 480).
     fn room_said(&self) -> Option<String> {
@@ -2247,7 +2279,21 @@ impl ShapePanel {
                     }
                     _ => String::new(),
                 };
-                format!("{after}K lists what can go here, Ctrl-n completes a word")
+                let kit = match (field.text().trim().is_empty(), self.kit_drums(services)) {
+                    (true, Some((group, _))) => format!(
+                        ". On a drum of G{group}: v and W select its drums, then !, for a kit line"
+                    ),
+                    _ => String::new(),
+                };
+                format!("{after}K lists what can go here, Ctrl-n completes a word{kit}")
+            }
+            // A drum's name typed on one drum's pattern: say how to enter it across the group.
+            (Some(bad), _) if self.names_a_drum(field.text(), bad.at, services) => {
+                let word = word_at(field.text(), bad.at);
+                format!(
+                    "{word} is a drum's name: for a kit line, select the drums with v and W, \
+                     then !. Esc puts it back"
+                )
             }
             (Some(bad), _) => format!(
                 "{}; the column plays the last text that read. Esc puts it back",
@@ -2396,4 +2442,13 @@ impl App {
             self.land_kept(panel);
         }
     }
+}
+
+/// The word of a text at a byte, up to the next space, bracket, mark or `|`: a hit's own text.
+fn word_at(text: &str, at: usize) -> &str {
+    let rest = text.get(at..).unwrap_or_default();
+    let end = rest
+        .find(|c: char| c.is_whitespace() || "[]<>(),|*!@?".contains(c))
+        .unwrap_or(rest.len());
+    &rest[..end]
 }

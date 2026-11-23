@@ -579,3 +579,51 @@ fn a_kit_lines_buffer_leaves_the_overview_in_sight_and_lights_its_rows() {
     let bx = lines[heading][..bd].chars().count() as u16;
     assert_ne!(screen[(bx, (heading + 1) as u16)].fg, rosewater);
 }
+
+/// On one drum of a named group, `!` says how to enter a kit line across the group, and a drum's
+/// name typed there says it again rather than that it isn't a note (decision 483).
+#[test]
+fn a_pattern_on_one_drum_says_how_to_make_a_kit_line() {
+    let drums = || {
+        let (mut app, rt) = app_of(4, 16);
+        let mut song = (**app.song()).clone();
+        for (track, name) in song.tracks.iter_mut().zip(["BD", "SN", "HH"]) {
+            track.name = name.to_owned();
+            track.group = Some(1);
+        }
+        app.services.history.replace_current(Arc::new(song));
+        (app, rt)
+    };
+    let (mut app, _rt) = drums();
+    keys(&mut app, "!");
+    assert!(
+        app.services
+            .status
+            .contains("On a drum of G1: v and W select its drums"),
+        "{}",
+        app.services.status
+    );
+    keys(&mut app, "bd*4");
+    assert!(
+        app.services
+            .status
+            .contains("bd is a drum's name: for a kit line, select the drums"),
+        "{}",
+        app.services.status
+    );
+    // A track in no group says neither.
+    let (mut app, _rt) = drums();
+    keys(&mut app, "WWW!");
+    assert_eq!(app.services.cursor.track, 3);
+    assert!(
+        !app.services.status.contains("kit line"),
+        "{}",
+        app.services.status
+    );
+    keys(&mut app, "bd");
+    assert!(
+        app.services.status.contains("isn't a note"),
+        "{}",
+        app.services.status
+    );
+}
