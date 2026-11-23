@@ -131,7 +131,7 @@ fn owns(shape: &Shape) -> Owns {
         // An `Own` rhythm's `x*3` in a row is a `RET` in one of its FX slots (decision 461), and
         // a `Mini`'s `C-3*3`; a `Mini`'s hit between rows is nudged.
         // A `Mini`'s `?` on the Note column is its row's `CHA` (decision 480).
-        FillKind::Mini if shape.mini.chances && shape.kit.is_none() => Owns::TimedFx,
+        FillKind::Mini if shape.mini.chances => Owns::TimedFx,
         FillKind::Mini if shape.mini.ratchets => Owns::NoteFx,
         FillKind::Mini => Owns::Timed,
         _ if matches!(shape.place, Where::Own(own) if own.ratchets) && shape.kind.has_where() => {

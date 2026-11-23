@@ -1660,11 +1660,11 @@ impl ShapePanel {
             }
             (None, false) => {}
         }
-        if let Some(cut) = self.cut_said() {
+        for said in [self.cut_said(), self.room_said()].into_iter().flatten() {
             services.status = if services.status.is_empty() {
-                cut
+                said
             } else {
-                format!("{}; {cut}", services.status)
+                format!("{}; {said}", services.status)
             };
         }
         Outcome::Close
@@ -1734,6 +1734,29 @@ impl ShapePanel {
         if let Some(said) = self.dropped() {
             services.status = said;
         }
+    }
+
+    /// Where a `Mini`'s `?` on the Note column lands on a row with no FX slot free for its `CHA`,
+    /// so the seed decides it there instead, as the status line says it (decision 480).
+    fn room_said(&self) -> Option<String> {
+        let part = self.parts.first()?;
+        if self.shape.kind != FillKind::Mini || !matches!(part.column, ShapeColumn::Note { .. }) {
+            return None;
+        }
+        let own = self.own_of(0);
+        let rows = vt_model::shape::no_room(
+            self.base_steps(part),
+            part.range,
+            &self.shape_of(0),
+            own.beats(),
+        );
+        let first = rows.first()?;
+        Some(match rows.len() {
+            1 => format!("Row {first:02X} has no FX slot free for its ?, so it's drawn as written"),
+            rows => {
+                format!("{rows} rows have no FX slot free for their ?, so they're drawn as written")
+            }
+        })
     }
 
     /// How many of a `Mini`'s hits share a row on its first part and are dropped, as the status
@@ -2236,14 +2259,14 @@ impl ShapePanel {
                 format!("{}{after}", token_named(field, at).0)
             }
         };
-        if field.bad().is_none()
-            && let Some(cut) = self.cut_said()
-        {
-            services.status = if services.status.is_empty() {
-                cut
-            } else {
-                format!("{}; {cut}", services.status)
-            };
+        if field.bad().is_none() {
+            for said in [self.cut_said(), self.room_said()].into_iter().flatten() {
+                services.status = if services.status.is_empty() {
+                    said
+                } else {
+                    format!("{}; {said}", services.status)
+                };
+            }
         }
     }
 }

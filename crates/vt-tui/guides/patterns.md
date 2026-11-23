@@ -145,14 +145,16 @@ in. So `C-3 C-3?30 C-3?70 C-3` at `Step 4 rows` writes four notes, the second at
 note plays at `80`, the 30% one comes in as `CDLT` rises past `A4`, and the 70%
 one goes below `5C` (**Moving every chance** in the FX guide).
 
-A hit nudged off its row, a triplet's, and a row with every FX slot taken can't
-hold a `CHA` as well, so their `?` draws here instead, as below. So does a kit
-line's, whose `?` falls the same way on every track the line spans.
+It's the same on every Note column: a triplet's hit nudged off its row keeps its
+nudge and its `CHA` both, `[C-3 D-3? E-3]` writing `D-3` nudged `+8` at `CHA 80`,
+and a kit line's `sn?` is a `CHA` on the snare's row, the one track that plays it.
+The one row that can't hold one is a row with all three FX slots taken: its `?`
+is drawn as written, as below, and the status line says so, `Row 04 has no FX
+slot free for its ?`.
 
-**Everywhere else, it's drawn in the pattern,** from the fill's seed, the hit and
-its row: on
-Velocity, Length, Nudge and FX columns there's no note to give a chance to, so
-the hit is written or not. The same hits play each pass until it draws again:
+**On the other columns, it's drawn in the pattern,** from the fill's seed, the hit
+and its row: on Velocity, Length, Nudge and FX columns there's no note to give a
+chance to, so the `?` is the chance its value is written. The same hits play each pass until it draws again:
 with `Vary` at `Once` the line keeps its draw, and at `Each pass` it draws anew
 every time round. A line written with `Enter` from `!` freezes `< >` and these
 draws as their first pass; kept live with `L`, they go on pass to pass.

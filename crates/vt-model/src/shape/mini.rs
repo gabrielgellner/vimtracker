@@ -113,12 +113,10 @@ pub(super) fn render<F: FnMut(usize, &Shaped, Option<usize>)>(
     texts: Texts,
     out: &mut Out<'_, F>,
 ) {
-    // On the Note column a `?` is its row's `CHA` rather than a draw here, but on a kit line,
-    // whose `?` falls the same on every track it spans (decision 480).
+    // On the Note column a `?` is its row's `CHA` rather than a draw here, a kit line's too, as
+    // its hit is the one track's it names (decision 480).
     let line = Own {
-        keeps_chance: shape.mini.chances
-            && shape.kit.is_none()
-            && matches!(column, ShapeColumn::Note { .. }),
+        keeps_chance: shape.mini.chances && matches!(column, ShapeColumn::Note { .. }),
         ..shape.mini
     };
     let len = out.cells.len();
@@ -173,8 +171,9 @@ pub(super) fn render<F: FnMut(usize, &Shaped, Option<usize>)>(
             ShapeColumn::Note { .. } if nudge != 0.0 => timed(cell, step, nudge as i8),
             _ => cell,
         };
-        // A `?`'s chance goes in its row's `CHA`, which the engine rolls; where the row can't
-        // hold one, the seed's draw decides it here, as it always has.
+        // A `?`'s chance goes in its row's `CHA`, which the engine rolls; a row with no FX slot
+        // free is decided by the seed's draw here, as it always was, and the pattern's panel says
+        // so ([`no_room`]).
         let cell = match (line.keeps_chance && lands.chance < 100, lands.drawn) {
             (false, _) => cell,
             (true, drawn) => match own::chanced(cell, step, lands.chance) {
@@ -197,6 +196,35 @@ pub(super) fn render<F: FnMut(usize, &Shaped, Option<usize>)>(
             out.cells,
         );
     }
+}
+
+/// The rows of a span, by their place in the phrase, where a `?` on the Note column lands with no
+/// FX slot free for its `CHA`, so the seed's draw decides it instead (decision 480): for the
+/// status line to say.
+pub fn no_room(
+    steps: &[Step],
+    range: StepRange,
+    shape: &Shape,
+    beats: &[crate::shape::Beat],
+) -> Vec<usize> {
+    let line = Own {
+        keeps_chance: true,
+        ..shape.mini
+    };
+    let mut rows = Vec::new();
+    own::walk(beats, line, shape.seed, range.len(), |lands: Lands| {
+        let row = range.first + lands.nth;
+        let full = steps.get(row).is_some_and(|step| {
+            let slots = step.fx.len().min(crate::constants::FX_SLOTS);
+            step.fx[..slots].iter().all(|slot| {
+                slot.command.is_some() && slot.command != Some(crate::step::FxCommand::Cha)
+            })
+        });
+        if lands.chance < 100 && full {
+            rows.push(row);
+        }
+    });
+    rows
 }
 
 /// How many of a line's hits land on a row another took first over `count` rows, and so are
