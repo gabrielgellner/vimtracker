@@ -452,6 +452,10 @@ struct Column<'a> {
     /// When each row starts, in the track's own steps, and how many ticks its step lasts.
     starts: Vec<usize>,
     ticks: u64,
+    /// Its phrase's rows, from its loop's start, that the token under the shape panel's cursor
+    /// writes, where its track is one the panel's line spans: a kit line's or a stack's, lit as
+    /// the grid lights the cursor's own (decisions 460 and 482).
+    lit: Vec<usize>,
 }
 
 impl Column<'_> {
@@ -488,12 +492,24 @@ fn column<'a>(ctx: &Ctx<'a>, track: usize) -> Option<Column<'a>> {
     let heard = moving
         .and_then(|_| ctx.heard_step(track, position.phrase, held.start() + position.step))
         .map(|step| step.note);
+    // The cursor's own track's rows are lit on the grid.
+    let lit = ctx
+        .shape_panel()
+        .filter(|_| track != ctx.cursor().track)
+        .and_then(|panel| panel.token_rows(track, position.phrase))
+        .map(|(_, rows)| {
+            rows.into_iter()
+                .filter_map(|row| row.checked_sub(held.start()))
+                .collect()
+        })
+        .unwrap_or_default();
     Some(Column {
         steps,
         playing: moving.map(|_| (position.step, position.pulse)),
         heard,
         starts: timeline::starts(steps),
         ticks: owner.speed.ticks(),
+        lit,
     })
 }
 
@@ -567,6 +583,9 @@ fn column_spans(
                 theme::dim()
             };
             let mark = if more { MORE_STARTS } else { ' ' };
+            // A row the line's token writes on this track, in the cursor's colour, as the grid's,
+            // over the selection the line was entered on.
+            let lit = shown.is_some_and(|row| column.lit.contains(&row));
             // The marker's cell, the note's, then the gap.
             let (marker, note) = match note {
                 // Playing, a note is lit and an empty row's `---` dimmed, as on the grid.
@@ -580,6 +599,15 @@ fn column_spans(
                 }
                 // The playhead is on a row that started in an earlier line.
                 None if playing => (Span::styled(">", theme::active()), Span::raw("   ")),
+                Some(note) if lit => {
+                    let style = Style::new()
+                        .fg(theme::ROSEWATER)
+                        .add_modifier(Modifier::BOLD);
+                    (
+                        Span::styled(mark.to_string(), style),
+                        Span::styled(note, style),
+                    )
+                }
                 Some(note) if in_selection => (
                     Span::styled(mark.to_string(), theme::selected()),
                     Span::styled(note, theme::selected()),

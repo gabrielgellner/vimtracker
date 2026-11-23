@@ -317,8 +317,9 @@ fn space_slash_searches_every_guides_text_and_opens_where_it_found_it() {
     assert!(
         picker.shown().all(|item| {
             let text = item.label.to_lowercase();
-            text.contains("pattern") && text.contains("buffer")
-                || item.meaning.to_lowercase().contains("pattern")
+            // A word may be in its heading or its guide's title, which a search looks through too.
+            let around = format!("{} {}", item.meaning, item.category).to_lowercase();
+            (text.contains("pattern") || around.contains("pattern")) && text.contains("buffer")
         }),
         "only what has both words"
     );

@@ -534,3 +534,48 @@ fn a_bar_picks_one_choice_at_random_each_time_round() {
     assert!(why("!C-3|D-3").contains("between the choices of a [ ]"));
     assert!(why("![C-3|").contains("has nothing in it"));
 }
+
+/// A kit line's buffer goes at the foot, so the overview's columns of the group's tracks stay in
+/// sight, and each lights the rows the token under the cursor writes on its track (decision 482).
+#[test]
+fn a_kit_lines_buffer_leaves_the_overview_in_sight_and_lights_its_rows() {
+    let (mut app, _rt) = app_of(3, 16);
+    let mut song = (**app.song()).clone();
+    for (track, name) in song.tracks.iter_mut().zip(["BD", "SN", "HH"]) {
+        track.name = name.to_owned();
+        track.group = Some(1);
+    }
+    app.services.history.replace_current(Arc::new(song));
+    // Back to `sn` from the end, so it's the token under the cursor.
+    keys(&mut app, "vGWW!bd . sn .<Esc>h");
+    let lines = screen_cells(&mut app);
+    let title = lines
+        .iter()
+        .position(|line| line.contains("Note kit line"))
+        .expect("the buffer");
+    assert!(title > 30, "at the foot, line {title}");
+    // The overview's heading and SN's note on row 08, in sight.
+    let heading = lines
+        .iter()
+        .position(|line| line.contains("BD   SN   HH"))
+        .unwrap();
+    let row_08 = heading + 9;
+    // By characters, as the frame's are wider than a byte.
+    let sn = lines[heading][..lines[heading].find("SN").unwrap()]
+        .chars()
+        .count();
+    let cell = |line: usize| lines[line].chars().skip(sn).take(3).collect::<String>();
+    assert_eq!(cell(row_08), "C-3", "{}", lines[row_08]);
+    // Lit in the cursor's colour, where `bd`'s row on BD isn't.
+    let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(163, 42)).unwrap();
+    terminal
+        .draw(|frame| vt_tui::run::draw_screen(frame, &mut app, None, std::time::Instant::now()))
+        .unwrap();
+    let screen = terminal.backend().buffer().clone();
+    let x = sn as u16;
+    let rosewater = vt_tui::widgets::theme::ROSEWATER;
+    assert_eq!(screen[(x, row_08 as u16)].fg, rosewater);
+    let bd = lines[heading].find("BD").unwrap();
+    let bx = lines[heading][..bd].chars().count() as u16;
+    assert_ne!(screen[(bx, (heading + 1) as u16)].fg, rosewater);
+}

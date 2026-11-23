@@ -371,7 +371,8 @@ const PATTERN_HINT: &str = "Enter write  L keep live  [s ]s Step  K what goes  E
 
 /// A pattern entered with `!` (decision 474): its buffer alone, under the grid's top, right of
 /// the cursor's track's grid, over the other tracks, or, where there's no room, left of the
-/// column it fills, so the rows it writes stay in sight, lit as the token under the cursor writes
+/// column it fills; across tracks, at the foot, so the overview's columns it writes stay in
+/// sight (decision 482); so the rows it writes stay in sight, lit as the token under the cursor writes
 /// them; its title names the column and its `Step`. `column` is the column's left edge on screen
 /// and the right edge of its track's grid.
 pub(crate) fn draw_pattern(
@@ -413,7 +414,14 @@ pub(crate) fn draw_pattern(
         rows: Some(rows_of(panel, ctx, field, &lit, room)),
         menu: tokens.menu.as_ref(),
     };
+    // A line across tracks, a kit line's or a stack's, writes into the overview's columns, so
+    // it goes at the foot, leaving them in sight as it lights their rows (decision 482).
+    let across = panel
+        .parts
+        .iter()
+        .any(|part| part.track != panel.parts[0].track);
     match column {
+        Some((left, _)) if across => buffer.draw_at_foot(frame, area, left),
         Some(column) => buffer.draw_beside(frame, area, area.y, column),
         None => buffer.draw(frame, area, area.y, area.right()),
     }
