@@ -250,6 +250,9 @@ impl SettingId {
     /// `00`, where velocity leaves the level alone, to [`MOST_VELOCITY_RANGE`](super::MOST_VELOCITY_RANGE)'s
     /// 48 dB, as [`velocity_gain`](super::velocity_gain) gives it (decision 478).
     pub const VELOCITY_RANGE: Self = Self(LATER_TRACK_START as u16 + 26);
+    /// How `CDLT` and `CHA` thin a track, a place in [`THIN_NAMES`](super::THIN_NAMES): where each
+    /// row's draw against its chance comes from (decision 479).
+    pub const THIN: Self = Self(LATER_TRACK_START as u16 + 27);
     /// Which of the bank's entries a sampler plays: `00` none, or an entry's number.
     pub const SAMPLE: Self = Self(SAMPLER_START as u16);
     /// Which of its entry's slices a sampler plays, by number, clamped to the last.

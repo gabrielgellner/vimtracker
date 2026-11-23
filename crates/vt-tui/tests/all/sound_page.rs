@@ -111,7 +111,7 @@ fn the_four_devices_fill_the_page_and_the_keys_box_at_163_by_42() {
             assert_eq!(found[2].1, "Output");
             assert_eq!(
                 found[3].1,
-                "Play  Jump 00  Chance 80  Row  Dice Off  Mutate 00  Dice jump 00  Swing 00  Vel range 18"
+                "Play  Jump 00  Chance 80  Row  Thin Random  Dice Off  Mutate 00  Dice jump 00  Swing 00  Vel range 18"
             );
             let bottom = top + 35;
             let line = lines[bottom].trim_start_matches(frame);
@@ -265,16 +265,7 @@ fn the_sound_rack_moves_on_its_own_without_an_app() {
     // Kick has no type, so its title has only the machine.
     assert_eq!(
         devices[0].title,
-        [
-            Some(Control::Machine),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None
-        ]
+        std::array::from_fn(|at| (at == 0).then_some(Control::Machine))
     );
     assert_eq!(page.device_cursor(track), at(0, 0, 0));
     assert!(matches!(
@@ -889,8 +880,8 @@ fn a_note_plays_relative_to_the_tune_the_sound_page_gives_its_sample() {
 fn the_play_devices_title_has_the_tracks_dice_loop_after_its_chance() {
     use vt_model::action::TrackControl;
     let (mut app, _realtime) = playing(Machine::Plaits(SynthVoice::Acid));
-    // `Jump` and `Chance` have fine digits, which `l` goes onto first, and `Target` is next.
-    press(&mut app, "3}lllll");
+    // `Jump` and `Chance` have fine digits, which `l` goes onto first, then `Target` and `Thin`.
+    press(&mut app, "3}llllll");
     assert_eq!(app.track_control(), Control::Base(TrackControl::DiceLoop));
     press(&mut app, "====");
     assert_eq!(app.song().tracks[0].dice_loop, 4);

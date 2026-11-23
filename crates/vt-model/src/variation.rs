@@ -134,6 +134,62 @@ pub fn thin_keeps(seed: u64, track: usize, count: i64, moved: f32) -> bool {
     kept(seed, track, count, 0, moved_chance(1.0, 1.0, moved))
 }
 
+/// How `CDLT` and `CHA` thin a track, `THIN` (decision 479): where the draw each row's chance is
+/// checked against comes from. A row plays where its draw is below its chance, as `CDLT` moves it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Thin {
+    /// Rolled from the seed, fresh each pass or held by the dice loop, as ever.
+    Random,
+    /// The same for every row, half, so a row plays while its chance is past half: the rows go by
+    /// their chances, and rows with none all go together.
+    Chance,
+    /// From where the row falls in the bar: sixteenths go first, then eighths, then beats, and
+    /// the bar's first row last.
+    Beats,
+    /// From the row's place among the phrase's notes, so as they go, those left stay evenly
+    /// spaced.
+    Spread,
+}
+
+impl Thin {
+    /// The way at a place in [`THIN_NAMES`](crate::settings::THIN_NAMES), on the `00` to `FF`
+    /// scale, as a lock or modulation leaves it.
+    pub fn at(value: f32) -> Self {
+        match value.round().clamp(0.0, 3.0) as u8 {
+            1 => Self::Chance,
+            2 => Self::Beats,
+            3 => Self::Spread,
+            _ => Self::Random,
+        }
+    }
+
+    /// A row's draw, from 0 to 1, where it's fixed rather than rolled: none on `Random`. `row` is
+    /// its place in its phrase, and `note` its place among the phrase's `notes`, counting from 0.
+    pub fn draw(self, row: usize, note: usize, notes: usize) -> Option<f32> {
+        match self {
+            Self::Random => None,
+            Self::Chance => Some(0.5),
+            Self::Beats => Some(match row % 16 {
+                0 => 0.125,
+                at if at % 4 == 0 => 0.375,
+                at if at % 2 == 0 => 0.625,
+                _ => 0.875,
+            }),
+            // The van der Corput order: the first note first, then the one halfway, then the
+            // quarters, so at any density the notes left are as evenly spread as they can be.
+            Self::Spread => {
+                let span = notes.max(1).next_power_of_two();
+                let bits = span.trailing_zeros();
+                let turned = match bits {
+                    0 => 0,
+                    _ => note.reverse_bits() >> (usize::BITS - bits),
+                };
+                Some((turned as f32 + 0.5) / span as f32)
+            }
+        }
+    }
+}
+
 /// Whether a note kept with a chance of `share`, from 0 to 1, plays: a row's with no `CHA`
 /// under `CDLT` below `80` (decision 405), or one pulse or ratchet `hit` of a row when `CDLT`
 /// targets pulses, `0` the pulse's own note and from `1` its ratchet's hits (decision 406). It's a

@@ -817,7 +817,7 @@ const DICE_PAGE: Page<Setting> = knobs(
         s("diceloop"),
         s("dicemutate"),
         s("dicejump"),
-        __,
+        s("thin"),
         __,
         __,
         __,

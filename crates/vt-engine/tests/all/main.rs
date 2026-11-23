@@ -93,6 +93,7 @@ mod swing;
 mod synth;
 mod tails;
 mod tempo;
+mod thin;
 mod timing;
 mod track_reset;
 mod tracking;

@@ -301,6 +301,10 @@ pub struct Track {
         skip_serializing_if = "is_default_velocity_range"
     )]
     pub velocity_range: u8,
+    /// Where held `THIN` starts: how `CDLT` and `CHA` thin the track, a place in
+    /// [`THIN_NAMES`](crate::settings::THIN_NAMES), `00` at random (decision 479).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub thin: u8,
     /// The choke group it's in, if any, from 1 to `CHOKE_GROUPS`: a note on it cuts off what's
     /// sounding on the other tracks in the group, as a closed hat cuts an open one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -550,6 +554,7 @@ impl Track {
             TrackControl::ChainOrder => self.chain_order,
             TrackControl::ChainJump => self.chain_jump,
             TrackControl::VelocityRange => self.velocity_range,
+            TrackControl::Thin => self.thin,
         }
     }
 
@@ -586,6 +591,7 @@ impl Track {
             TrackControl::ChainOrder => &mut self.chain_order,
             TrackControl::ChainJump => &mut self.chain_jump,
             TrackControl::VelocityRange => &mut self.velocity_range,
+            TrackControl::Thin => &mut self.thin,
         };
         *held = match control {
             TrackControl::SendA | TrackControl::SendB => value.min(MAX_LEVEL),
@@ -865,6 +871,7 @@ impl Default for Track {
             chain_order: 0,
             chain_jump: 0,
             velocity_range: DEFAULT_VELOCITY_RANGE,
+            thin: 0,
             choke: None,
             group: None,
             gate_length: None,

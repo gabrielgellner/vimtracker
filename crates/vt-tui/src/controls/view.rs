@@ -308,6 +308,26 @@ pub fn view(control: Control, track: &Track, song: &Song, scale: bool) -> Option
             )
             .text(meanings[at].to_owned())
         }
+        Control::Base(TrackControl::Thin) => {
+            let names = vt_model::settings::THIN_NAMES;
+            let at = usize::from(track.thin).min(names.len() - 1);
+            let meanings = [
+                "Random: CDLT drops notes at random, each row's draw rolled",
+                "Chance: rows go by their CHA, highest kept; with no CHA they all go together",
+                "Beats: sixteenths go first, then eighths, then beats, the bar's first row last",
+                "Spread: the notes left stay evenly spaced as CDLT takes them",
+            ];
+            of.listed(
+                names
+                    .iter()
+                    .zip(meanings)
+                    .map(|(name, meaning)| Choice::named(*name).meaning(meaning)),
+                at,
+                0,
+                false,
+            )
+            .text(meanings[at].to_owned())
+        }
         Control::Base(TrackControl::DiceLoop) => dice_loop_view(of, track),
         Control::Base(TrackControl::ChainOrder) => chain_order_view(of, track),
         Control::Base(which) => {

@@ -638,11 +638,12 @@ pub enum TrackControl {
     ChainOrder,
     ChainJump,
     VelocityRange,
+    Thin,
 }
 
 impl TrackControl {
     /// Every one, in the order they're declared.
-    pub const ALL: [Self; 29] = [
+    pub const ALL: [Self; 30] = [
         Self::Cutoff,
         Self::Resonance,
         Self::Pan,
@@ -672,6 +673,7 @@ impl TrackControl {
         Self::ChainOrder,
         Self::ChainJump,
         Self::VelocityRange,
+        Self::Thin,
     ];
 
     /// The setting this is the base of, if steps can set it too.
@@ -706,6 +708,7 @@ impl TrackControl {
             Self::ChainOrder => Some(SettingId::CHAIN_ORDER),
             Self::ChainJump => Some(SettingId::CHAIN_JUMP),
             Self::VelocityRange => Some(SettingId::VELOCITY_RANGE),
+            Self::Thin => Some(SettingId::THIN),
         }
     }
 }

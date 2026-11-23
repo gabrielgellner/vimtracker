@@ -56,6 +56,8 @@ const DICE_JUMP: &str = "Dice jump ";
 const SWING: &str = "Swing ";
 /// What a track's velocity range is called there, before its value (decision 478).
 const VELOCITY_RANGE: &str = "Vel range ";
+/// What `Thin` is called there, before its choice (decision 479).
+const THIN: &str = "Thin ";
 
 /// The track page's cells, read from the track as the page draws it.
 pub(super) struct TrackCells<'a> {
@@ -212,6 +214,7 @@ impl<'a> TrackCells<'a> {
             Control::Base(TrackControl::DiceJump) => Some(DICE_JUMP),
             Control::Base(TrackControl::Swing) => Some(SWING),
             Control::Base(TrackControl::VelocityRange) => Some(VELOCITY_RANGE),
+            Control::Base(TrackControl::Thin) => Some(THIN),
             _ => None,
         };
         if let Some(before) = before {
