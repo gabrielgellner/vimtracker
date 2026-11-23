@@ -47,7 +47,7 @@ pub use divisions::{
 pub(crate) use follow::copy_fx;
 pub use follow::{Follow, MAX_TRANSPOSE, Source, first_note};
 pub use grids::{ACCENT_LEVEL, DrumPart, GRIDS_STEPS, Grids, parts as drum_parts};
-pub use mini::{Atom, KitLine, degree_note, dropped, keeping_step};
+pub use mini::{Atom, KitLine, degree_note, dropped, keeping_step, no_room};
 pub use mutation::{MAX_MUTATION, Mutations};
 pub use own::{Beat, Euclid, MAX_STEP, Own, OwnRhythm, What, line_steps};
 pub(crate) use params::{BEND_JUMP, BEND_NUDGE};

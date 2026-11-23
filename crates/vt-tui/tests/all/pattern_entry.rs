@@ -466,9 +466,32 @@ fn a_question_mark_on_the_note_column_is_its_rows_chance() {
     let (mut app, _rt) = app_of(1, 16);
     keys(&mut app, "!C-3<Esc>[s[s<Enter>l!7F?50<Esc>[s[s<Enter>");
     assert!((0..16).all(|row| chance_on(&app, row).is_none()));
-    // A triplet's middle hit is nudged off its row, which a cell can't hold with a `CHA` too, so
-    // it draws as before.
+    // A triplet's middle hit is nudged off its row and keeps its chance there too.
     let (mut app, _rt) = app_of(1, 16);
-    keys(&mut app, "![C-3 C-3? C-3]<Enter>");
-    assert!((0..16).all(|row| chance_on(&app, row).is_none()));
+    keys(&mut app, "![C-3 D-3? E-3]<Enter>");
+    let steps = app.song().tracks[0].phrases[&0].steps().to_vec();
+    assert_eq!(steps[1].nudge, 8, "nudged");
+    assert_eq!(chance_on(&app, 1), Some(0x80), "and chanced, 50%");
+    // A row with every FX slot taken can't hold one: the draw decides it, and the status says so.
+    let mut song = Song::new(1);
+    let full = "--- -- ret:02 cut:40 del:03".parse::<Step>().unwrap();
+    let steps: Vec<Step> = (0..16)
+        .map(|row| {
+            if row == 4 {
+                full.clone()
+            } else {
+                E.parse().unwrap()
+            }
+        })
+        .collect();
+    song.tracks[0]
+        .phrases
+        .insert(0, Arc::new(Phrase::from_steps(steps)));
+    let (mut app, _rt) = app_for(song);
+    keys(&mut app, "!C-3 C-3?30");
+    assert!(
+        app.services.status.contains("Row 04 has no FX slot free"),
+        "{}",
+        app.services.status
+    );
 }

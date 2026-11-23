@@ -49,6 +49,17 @@ pub enum GenCell {
         gate: Option<Gate>,
         nudge: i8,
     },
+    /// The same with a `CHA` in one of the row's FX slots, by its place, the rest as they are: a
+    /// `Mini`'s hit nudged off its row with its `?`'s chance (decision 480). It holds the one
+    /// slot rather than all of them, so a cell stays small.
+    TimedChance {
+        note: Note,
+        velocity: Option<u8>,
+        gate: Option<Gate>,
+        nudge: i8,
+        slot: u8,
+        chance: u8,
+    },
     Velocity(u8),
     /// A nudge, in 24ths of a sixteenth either way.
     Nudge(i8),
@@ -56,6 +67,15 @@ pub enum GenCell {
     Gate(Gate),
     /// The column's FX slot.
     Fx(FxSlot),
+}
+
+/// A `CHA` of a chance on the `00` to `FF` scale, as a `Mini`'s `?` writes it (decision 480).
+pub(crate) fn chance_slot(chance: u8) -> FxSlot {
+    FxSlot {
+        command: Some(crate::step::FxCommand::Cha),
+        value: u16::from(chance) << 8,
+        ..FxSlot::default()
+    }
 }
 
 impl GenCell {
@@ -96,6 +116,22 @@ impl GenCell {
                 step.velocity = velocity;
                 step.gate = gate;
                 step.nudge = nudge;
+            }
+            Self::TimedChance {
+                note,
+                velocity,
+                gate,
+                nudge,
+                slot,
+                chance,
+            } => {
+                step.note = note;
+                step.velocity = velocity;
+                step.gate = gate;
+                step.nudge = nudge;
+                if let Some(cell) = step.fx.get_mut(usize::from(slot)) {
+                    *cell = chance_slot(chance);
+                }
             }
             Self::Velocity(velocity) => step.velocity = Some(velocity),
             Self::Nudge(nudge) => step.nudge = nudge,
@@ -202,6 +238,22 @@ impl RowView {
                 self.velocity = velocity;
                 self.gate = gate;
                 self.nudge = nudge;
+            }
+            GenCell::TimedChance {
+                note,
+                velocity,
+                gate,
+                nudge,
+                slot,
+                chance,
+            } => {
+                self.note = note;
+                self.velocity = velocity;
+                self.gate = gate;
+                self.nudge = nudge;
+                if let Some(Some(cell)) = self.fx.get_mut(usize::from(slot)) {
+                    *cell = chance_slot(chance);
+                }
             }
             GenCell::Velocity(velocity) => self.velocity = Some(velocity),
             GenCell::Nudge(nudge) => self.nudge = nudge,

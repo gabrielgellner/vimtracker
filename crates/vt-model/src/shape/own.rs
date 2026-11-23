@@ -574,16 +574,22 @@ fn ratcheted(cell: &mut GenCell, step: Option<&Step>, apart: u16) {
 
 /// A note's cell with its `?`'s chance as a `CHA` of its own, `percent` of the time, in the row's
 /// `CHA` if it has one or else its first empty FX slot, so the engine rolls it as the row plays
-/// and the track's `CDLT` and `Thin` reach it (decision 480). None where the row can't hold one:
-/// its note is nudged off the row, or it has no slot free.
+/// and the track's `CDLT` and `Thin` reach it, nudged off its row too where it is (decision 480).
+/// None where the row has no slot free.
 pub(super) fn chanced(cell: GenCell, step: &Step, percent: u8) -> Option<GenCell> {
-    let (note, velocity, gate) = match cell {
-        GenCell::Pitch(note) => (crate::step::Note::On(note), step.velocity, step.gate),
+    let (note, velocity, gate, nudge) = match cell {
+        GenCell::Pitch(note) => (crate::step::Note::On(note), step.velocity, step.gate, None),
         GenCell::Note {
             note,
             velocity,
             gate,
-        } => (note, velocity, gate),
+        } => (note, velocity, gate, None),
+        GenCell::Timed {
+            note,
+            velocity,
+            gate,
+            nudge,
+        } => (note, velocity, gate, Some(nudge)),
         _ => return None,
     };
     let mut fx: [FxSlot; crate::constants::FX_SLOTS] =
@@ -594,17 +600,23 @@ pub(super) fn chanced(cell: GenCell, step: &Step, percent: u8) -> Option<GenCell
         .iter()
         .position(|slot| slot.command == Some(FxCommand::Cha))
         .or_else(|| open.iter().position(|slot| slot.command.is_none()))?;
-    let value = (u16::from(percent.min(100)) * 255 + 50) / 100;
-    open[at] = FxSlot {
-        command: Some(FxCommand::Cha),
-        value: value << 8,
-        ..FxSlot::default()
-    };
-    Some(GenCell::NoteFx {
-        note,
-        velocity,
-        gate,
-        fx,
+    let chance = ((u16::from(percent.min(100)) * 255 + 50) / 100) as u8;
+    open[at] = super::render::chance_slot(chance);
+    Some(match nudge {
+        Some(nudge) => GenCell::TimedChance {
+            note,
+            velocity,
+            gate,
+            nudge,
+            slot: at as u8,
+            chance,
+        },
+        None => GenCell::NoteFx {
+            note,
+            velocity,
+            gate,
+            fx,
+        },
     })
 }
 

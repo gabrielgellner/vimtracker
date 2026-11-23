@@ -245,9 +245,24 @@ fn one_seed_for_the_line() {
         },
     )
     .unwrap();
+    // Each `bd?` is its row's `CHA`, on every track that plays it, the same (decision 480).
     let bd = rows(&twins, 0);
-    assert!(bd.contains('x') && bd.contains('.'), "{bd}");
+    assert_eq!(bd, "x".repeat(bd.len()), "every hit lands");
+    let chances = |track: usize| -> Vec<Option<u16>> {
+        twins.tracks[track].phrases[&0]
+            .steps()
+            .iter()
+            .map(|step| {
+                step.fx
+                    .iter()
+                    .find(|slot| slot.command == Some(vt_model::step::FxCommand::Cha))
+                    .map(|slot| slot.value >> 8)
+            })
+            .collect()
+    };
+    assert!(chances(0).iter().all(|chance| *chance == Some(0x80)));
     assert_eq!(rows(&twins, 1), bd);
+    assert_eq!(chances(1), chances(0));
 }
 
 /// Saved and read back, each generator takes its track's name again and plays as it did.
